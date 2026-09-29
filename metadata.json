@@ -1,0 +1,6 @@
+{
+  "name": "TrafficWatch - AI Traffic Violation & Enforcement System",
+  "description": "Full-stack traffic violation detection and enforcement management system for traffic police officers and administration with AI-assisted computer vision.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
