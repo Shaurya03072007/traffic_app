@@ -13,23 +13,23 @@ export const PrintChallanModal: React.FC<PrintChallanModalProps> = ({ violation,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white text-slate-900 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden border border-slate-300 my-8">
         {/* Header bar (Not printed) */}
-        <div className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between print:hidden">
+        <div className="bg-white text-slate-900 px-6 py-3 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
-            <Printer className="w-4 h-4 text-amber-400" />
+            <Printer className="w-4 h-4 text-blue-700" />
             <span className="font-semibold text-sm">Official Electronic Traffic Violation Notice (e-Challan)</span>
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={handlePrint}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded text-xs font-bold flex items-center space-x-1"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold flex items-center space-x-1"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>PRINT CHALLAN</span>
             </button>
-            <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white">
+            <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -40,7 +40,7 @@ export const PrintChallanModal: React.FC<PrintChallanModalProps> = ({ violation,
           {/* Emblem & Department Title */}
           <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
             <div className="text-xs tracking-widest font-bold uppercase text-slate-600">Government of India / State Traffic Police</div>
-            <div className="text-xl font-black uppercase tracking-wide text-slate-950 mt-1">E-Challan Notice of Traffic Violation</div>
+            <div className="text-xl font-black uppercase tracking-wide text-white mt-1">E-Challan Notice of Traffic Violation</div>
             <div className="text-xs text-slate-600 italic">Issued under Section 133 of the Motor Vehicles Act, 1988 (as amended)</div>
           </div>
 
@@ -152,8 +152,8 @@ export const PrintChallanModal: React.FC<PrintChallanModalProps> = ({ violation,
               )}
             </div>
             <div className="flex flex-col items-center justify-center text-center">
-              <div className="w-20 h-20 bg-slate-900 text-white flex items-center justify-center rounded p-1 mb-1">
-                <QrCode className="w-16 h-16 text-white" />
+              <div className="w-20 h-20 bg-white text-slate-900 flex items-center justify-center rounded p-1 mb-1">
+                <QrCode className="w-16 h-16 text-slate-900" />
               </div>
               <div className="text-[9px] text-slate-600">Scan via Parivahan or UPI to pay fine</div>
             </div>

@@ -99,6 +99,7 @@ class ViolationResponse(BaseModel):
     evidence_image_url: Optional[str] = None
     officer_remarks: Optional[str] = None
     created_at: datetime
+    owner_phone: Optional[str] = None
 
 class ViolationStatusUpdate(BaseModel):
     status: str
@@ -116,3 +117,11 @@ class AdminDashboardStats(BaseModel):
     total_fines_collected: int
     active_officers_count: int
     recent_cases: List[ViolationResponse]
+
+class VehicleCreate(BaseModel):
+    vehicle_number: str
+    vehicle_type: str
+    owner_name: str
+    owner_phone: str
+    registration_status: str = "Active"
+    insurance_valid_until: str

@@ -225,7 +225,7 @@ fun VideoCaptureScreen(
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "VIDEO FILE SELECTION",
+                            text = "MEDIA FILE SELECTION",
                             color = SlateGray,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -296,7 +296,7 @@ fun VideoCaptureScreen(
                     }
                 } else {
                     Button(
-                        onClick = { videoPickerLauncher.launch("video/*") },
+                        onClick = { videoPickerLauncher.launch("*/*") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -306,7 +306,7 @@ fun VideoCaptureScreen(
                     ) {
                         Icon(Icons.Default.UploadFile, contentDescription = null, tint = Navy900)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "SELECT VIDEO FROM GALLERY", color = Navy900, fontWeight = FontWeight.Bold)
+                        Text(text = "SELECT MEDIA FROM GALLERY", color = Navy900, fontWeight = FontWeight.Bold)
                     }
                 }
             }

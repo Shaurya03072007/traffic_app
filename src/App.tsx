@@ -21,6 +21,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [violations, setViolations] = useState<ViolationRecord[]>(INITIAL_VIOLATIONS);
+  const [vehicles, setVehicles] = useState(REGISTERED_VEHICLES);
   const [selectedCase, setSelectedCase] = useState<ViolationRecord | null>(null);
 
   // AUTOMATIC ROLE ROUTING (Prompt Section 2 & 14):
@@ -47,6 +48,27 @@ export default function App() {
     setViolations(prev => [newViolation, ...prev]);
   };
 
+  const handleAddVehicle = async (newVehicle: any) => {
+    // Optional: Call the backend API we created earlier
+    try {
+      const res = await fetch('/api/admin/vehicles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser?.id}` // mockup token
+        },
+        body: JSON.stringify(newVehicle)
+      });
+      if (res.ok) {
+        setVehicles(prev => [...prev, newVehicle]);
+      } else {
+        setVehicles(prev => [...prev, newVehicle]); // Fallback for demo
+      }
+    } catch (e) {
+       setVehicles(prev => [...prev, newVehicle]); // Fallback for demo
+    }
+  };
+
   const handleUpdateStatus = (caseId: string, newStatus: ViolationRecord['status']) => {
     setViolations(prev =>
       prev.map(v => (v.id === caseId ? { ...v, status: newStatus } : v))
@@ -62,7 +84,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Official Government Navigation Header */}
       <Navbar
         user={currentUser}
@@ -78,7 +100,7 @@ export default function App() {
           <AdminDashboard
             user={currentUser}
             violations={violations}
-            registeredVehicles={REGISTERED_VEHICLES}
+            registeredVehicles={vehicles}
             officersList={POLICE_OFFICERS}
             onSelectCase={(v) => setSelectedCase(v)}
             onUpdateStatus={handleUpdateStatus}
@@ -88,9 +110,9 @@ export default function App() {
         {/* GIS Radar Map View */}
         {activeTab === 'map' && (
           <div className="space-y-4">
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h1 className="text-xl font-bold text-white">Geographic Traffic Radar & Enforcement Hotspots</h1>
-              <p className="text-xs text-slate-400 mt-1">
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl">
+              <h1 className="text-xl font-bold text-slate-900">Geographic Traffic Radar & Enforcement Hotspots</h1>
+              <p className="text-xs text-slate-600 mt-1">
                 Visualizing violation coordinates across intersections and patrol corridors.
               </p>
             </div>
@@ -107,7 +129,11 @@ export default function App() {
 
         {/* Vehicles Directory */}
         {activeTab === 'vehicles' && (
-          <VehiclesDirectory vehicles={REGISTERED_VEHICLES} />
+          <VehiclesDirectory 
+            vehicles={vehicles} 
+            user={currentUser} 
+            onAddVehicle={handleAddVehicle} 
+          />
         )}
 
         {/* Officer Patrol Workflow (Matching Android Application) */}

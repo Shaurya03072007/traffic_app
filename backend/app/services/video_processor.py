@@ -68,6 +68,10 @@ class VideoProcessor:
         
         annotated_boxes_to_draw = []
 
+        best_motorcycle_box = None
+        best_evidence_clean_frame = None
+        sampled_motorcycle_frames: List[Dict[str, Any]] = []
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -79,12 +83,22 @@ class VideoProcessor:
                 
                 motorcycles = detections["motorcycles"]
                 persons = detections["persons"]
+
+                # Collect candidate frames containing motorcycles for multi-frame plate OCR
+                if motorcycles:
+                    primary_bike = sorted(motorcycles, key=lambda m: m["width"] * m["height"], reverse=True)[0]
+                    sampled_motorcycle_frames.append({
+                        "frame": frame.copy(),
+                        "frame_idx": frame_idx,
+                        "motorcycle_box": primary_bike
+                    })
                 
                 # Associate riders to bikes
                 associated_bikes = rider_associator.associate(motorcycles, persons)
+                skeletons = detections.get("skeletons", [])
                 
-                # Evaluate triple riding
-                triple_eval = triple_riding_detector.evaluate(associated_bikes)
+                # Evaluate triple riding using YOLO26x-Pose skeletons + association
+                triple_eval = triple_riding_detector.evaluate(associated_bikes, skeletons=skeletons)
                 if triple_eval["detected"]:
                     triple_riding_votes += 1
                     highest_triple_conf = max(highest_triple_conf, triple_eval["confidence"])
@@ -101,13 +115,18 @@ class VideoProcessor:
                     helmet_violations_votes += 1
                     highest_helmet_conf = max(highest_helmet_conf, helmet_eval["confidence"])
                     
-                riders_observed.append(len(all_riders))
+                riders_observed.append(max(len(all_riders), triple_eval.get("rider_count", 0)))
 
                 # Determine if this frame is the clearest evidence snapshot
                 severity = (1.0 if triple_eval["detected"] else 0.0) + (1.0 if helmet_eval["violation"] else 0.0)
                 if severity >= max_violation_severity or best_evidence_frame is None:
                     max_violation_severity = severity
                     best_evidence_frame_num = frame_idx
+                    if motorcycles:
+                        best_motorcycle_box = sorted(motorcycles, key=lambda m: m["width"] * m["height"], reverse=True)[0]
+                    # Save a clean copy for OCR
+                    best_evidence_clean_frame = frame.copy()
+                    
                     # Draw annotations for evidence snapshot
                     annotated_frame = frame.copy()
                     
@@ -115,7 +134,7 @@ class VideoProcessor:
                     for m in motorcycles:
                         mx, my, mw, mh = int(m["x"]), int(m["y"]), int(m["width"]), int(m["height"])
                         cv2.rectangle(annotated_frame, (mx, my), (mx + mw, my + mh), (255, 140, 0), 2)
-                        cv2.putText(annotated_frame, f"Motorcycle ({m['confidence']:.2f})", (mx, my - 8),
+                        cv2.putText(annotated_frame, f"Motorcycle ({m['confidence']:.2f})", (mx, max(15, my - 8)),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 140, 0), 2)
                                     
                     # Draw riders & helmet indicators
@@ -126,9 +145,17 @@ class VideoProcessor:
                         cv2.rectangle(annotated_frame, (px, py), (px + pw, py + ph), color, 2)
                         cv2.putText(annotated_frame, label, (px, max(15, py - 5)),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+                    # Draw YOLO26x-Pose keypoint skeletal nodes if present
+                    for skel in skeletons:
+                        head_pts = skel.get("head_points", [])
+                        shoulder_pts = skel.get("shoulder_points", [])
+                        for pt in head_pts + shoulder_pts:
+                            kx, ky = int(pt[0]), int(pt[1])
+                            cv2.circle(annotated_frame, (kx, ky), 4, (0, 255, 255), -1)
                                     
-                    # Add enforcement timestamp overlay
-                    cv2.putText(annotated_frame, f"TRAFFIC ENFORCEMENT CAMERA | SEC: {frame_idx/fps:.1f}s", 
+                    # Add enforcement timestamp and model watermark overlay
+                    cv2.putText(annotated_frame, f"POLICE ENFORCEMENT [YOLO26x ENGINE] | SEC: {frame_idx/fps:.1f}s", 
                                 (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
                     best_evidence_frame = annotated_frame
@@ -143,15 +170,32 @@ class VideoProcessor:
             _, buffer = cv2.imencode(".jpg", best_evidence_frame)
             _, evidence_image_url = EvidenceManager.save_annotated_frame(buffer.tobytes(), case_id, best_evidence_frame_num)
 
-        # Plate OCR
-        plate_str, plate_conf = plate_recognizer.extract_license_plate(
-            best_evidence_frame if best_evidence_frame is not None else np.zeros((100, 100, 3), dtype=np.uint8)
-        )
+        # Multi-Frame License Plate Recognition & Temporal Consensus
+        if sampled_motorcycle_frames:
+            plate_details = plate_recognizer.process_video_frames(sampled_motorcycle_frames)
+        else:
+            plate_details = plate_recognizer.extract_license_plate_details(
+                best_evidence_clean_frame if best_evidence_clean_frame is not None else np.zeros((100, 100, 3), dtype=np.uint8),
+                best_motorcycle_box
+            )
+
+        raw_plate_str = plate_details.get("plate", "UNKNOWN")
+        plate_conf = plate_details.get("confidence", 0.0)
+
+        from backend.app.api.admin import REGISTERED_VEHICLES
+        is_registered = any(v.get("vehicle_number") == raw_plate_str for v in REGISTERED_VEHICLES)
+        if not is_registered and raw_plate_str != "UNKNOWN":
+            display_plate = f"{raw_plate_str} (Unidentified in DB)"
+        elif not is_registered and raw_plate_str == "UNKNOWN":
+            display_plate = "Unidentified in DB"
+        else:
+            display_plate = raw_plate_str
 
         # Aggregate voting logic across sampled frames
-        has_helmet_violation = (helmet_violations_votes / max(1, processed_count)) >= 0.30
-        has_triple_riding = (triple_riding_votes / max(1, processed_count)) >= 0.25
-        avg_riders = int(round(np.mean(riders_observed))) if riders_observed else 1
+        # A violation only needs to be clearly visible in a couple of frames to issue a ticket
+        has_helmet_violation = helmet_violations_votes >= 2 or (helmet_violations_votes / max(1, processed_count)) >= 0.15
+        has_triple_riding = triple_riding_votes >= 2 or (triple_riding_votes / max(1, processed_count)) >= 0.10
+        max_riders_seen = max(riders_observed) if riders_observed else 1
 
         return {
             "case_id": case_id,
@@ -165,12 +209,13 @@ class VideoProcessor:
             "triple_riding": {
                 "detected": has_triple_riding,
                 "confidence": round(highest_triple_conf if has_triple_riding else 0.85, 2),
-                "details": f"Vehicle carries {avg_riders} passengers exceeding legal capacity" if has_triple_riding else "Permissible rider count"
+                "details": f"Vehicle carries {max_riders_seen} passengers exceeding legal capacity" if has_triple_riding else "Permissible rider count"
             },
             "motorcycle_detected": True,
-            "riders_count": max(avg_riders, 3 if has_triple_riding else (2 if has_helmet_violation else 1)),
-            "detected_license_plate": plate_str,
+            "riders_count": max(max_riders_seen, 3 if has_triple_riding else (2 if has_helmet_violation else 1)),
+            "detected_license_plate": display_plate,
             "plate_confidence": plate_conf,
+            "plate_details": plate_details,
             "evidence_frame_url": evidence_image_url,
             "evidence_video_url": f"/static/evidence/{case_id}/{video_path.name}",
             "model_name": "YOLOv8-TrafficCustom-v1.2"

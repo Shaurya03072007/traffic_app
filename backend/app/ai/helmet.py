@@ -6,6 +6,7 @@ from backend.app.utils.logging import logger
 class HelmetDetector:
     """
     Analyzes rider head regions to infer whether a safety helmet is present.
+    Uses YOLO26x-Pose keypoint anchoring for precise head localization.
     """
     @staticmethod
     def crop_head_region(frame: np.ndarray, person_box: Dict[str, Any]) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
@@ -15,9 +16,27 @@ class HelmetDetector:
         pw = int(min(width - px, person_box["width"]))
         ph = int(min(height - py, person_box["height"]))
         
-        # Head is generally in top 28% of the person's bounding box
-        head_h = max(10, int(ph * 0.28))
-        head_w = max(10, pw)
+        # Check if YOLO26x-Pose skeleton is available for precise head coordinates
+        skeleton = person_box.get("skeleton")
+        if skeleton and skeleton.get("head_points"):
+            hx, hy = skeleton["head_points"][0]
+            # Use shoulder span or proportional head radius
+            head_radius = max(15, int(pw * 0.35))
+            cx = int(hx)
+            cy = int(hy)
+            
+            x1 = max(0, cx - head_radius)
+            y1 = max(0, cy - int(head_radius * 1.3))
+            x2 = min(width, cx + head_radius)
+            y2 = min(height, cy + int(head_radius * 0.9))
+            
+            head_crop = frame[y1:y2, x1:x2]
+            if head_crop.size > 0 and head_crop.shape[0] >= 10 and head_crop.shape[1] >= 10:
+                return head_crop, (x1, y1, x2 - x1, y2 - y1)
+        
+        # Fallback: Head is located in top 30% of the person's bounding box
+        head_h = max(12, int(ph * 0.30))
+        head_w = max(12, pw)
         
         head_crop = frame[py:py + head_h, px:px + head_w]
         return head_crop, (px, py, head_w, head_h)
@@ -35,37 +54,32 @@ class HelmetDetector:
             hsv = cv2.cvtColor(head_crop, cv2.COLOR_BGR2HSV)
             gray = cv2.cvtColor(head_crop, cv2.COLOR_BGR2GRAY)
             
-            # Helmet features:
-            # 1. Smooth surface with high curvature (oval/circle)
-            # 2. Distinct non-skin, non-hair color or gloss reflection
-            # 3. Detect hair texture vs smooth shell using Laplacian variance
             lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
             
             # Detect circle contours (helmet crown)
             circles = cv2.HoughCircles(
                 gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=15,
-                param1=50, param2=30, minRadius=int(head_crop.shape[0]*0.2), maxRadius=int(head_crop.shape[0]*0.6)
+                param1=50, param2=30, minRadius=int(head_crop.shape[0]*0.18), maxRadius=int(head_crop.shape[0]*0.65)
             )
             
-            # Check skin tone in head region (face visible without helmet vs full face helmet)
-            # Normal Indian skin tones in HSV: H: 0-25, S: 35-170, V: 60-255
-            lower_skin = np.array([0, 30, 60], dtype=np.uint8)
-            upper_skin = np.array([25, 175, 255], dtype=np.uint8)
+            # Skin tone detection in head region
+            lower_skin = np.array([0, 25, 50], dtype=np.uint8)
+            upper_skin = np.array([28, 180, 255], dtype=np.uint8)
             skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
             skin_ratio = cv2.countNonZero(skin_mask) / float(head_crop.shape[0] * head_crop.shape[1] + 1e-5)
 
             has_circle = circles is not None and len(circles[0]) > 0
             
-            # If high skin ratio in upper half and high hair texture => no helmet
-            if skin_ratio > 0.35 and lap_var > 150:
+            # If high skin ratio in head region or natural hair texture detected => no helmet
+            if skin_ratio > 0.12 or lap_var > 65:
                 # Bare head detected
-                return False, round(min(0.96, 0.70 + (skin_ratio * 0.5)), 2)
-            elif has_circle or (lap_var < 90 and skin_ratio < 0.20):
+                return False, round(min(0.97, 0.75 + (skin_ratio * 0.5)), 2)
+            elif has_circle or (lap_var < 45 and skin_ratio < 0.08):
                 # Smooth shell detected
-                return True, round(0.88 + (0.05 if has_circle else 0.0), 2)
+                return True, round(0.90 + (0.05 if has_circle else 0.0), 2)
             else:
-                # Inconclusive/Borderline
-                return False, 0.65
+                # Conservative fallback - flag as violation for police officer review
+                return False, 0.72
         except Exception as e:
             logger.error(f"Helmet analysis error: {e}")
             return False, 0.50
@@ -93,11 +107,12 @@ class HelmetDetector:
             return {
                 "violation": True,
                 "confidence": round(avg_conf, 2),
-                "details": f"{violations_found} rider(s) detected without certified helmet"
+                "details": f"{violations_found} rider(s) detected without certified helmet (Section 129 MVA Violation)"
             }
         else:
             return {
                 "violation": False,
+
                 "confidence": 0.90,
                 "details": "All detected riders appear to be wearing helmets"
             }

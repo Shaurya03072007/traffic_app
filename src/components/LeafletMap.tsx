@@ -83,7 +83,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase
             cursor: pointer;
             transition: all 0.2s ease;
           ">
-            <div style="width: 6px; height: 6px; background-color: #0b1120; border-radius: 50%;"></div>
+            <div style="width: 6px; height: 6px; background-color: #f8fafc; border-radius: 50%;"></div>
           </div>
         `,
         iconSize: isSelected ? [28, 28] : [20, 20],
@@ -146,23 +146,23 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase
   }, [violations, selectedCaseId, onSelectCase]);
 
   return (
-    <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden border border-slate-800 shadow-xl bg-slate-900">
+    <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden border border-slate-200 shadow-xl bg-white">
       <div ref={mapContainerRef} className="w-full h-full min-h-[420px]" />
       
       {/* Legend Badge Overlay */}
-      <div className="absolute top-4 right-4 z-[1000] bg-slate-900/90 backdrop-blur-md border border-slate-800 p-3 rounded-lg text-xs space-y-1.5 shadow-lg">
-        <div className="font-bold text-slate-200 border-b border-slate-800 pb-1 mb-1.5">Violation Severity</div>
+      <div className="absolute top-4 right-4 z-[1000] bg-white/90 backdrop-blur-md border border-slate-200 p-3 rounded-lg text-xs space-y-1.5 shadow-lg">
+        <div className="font-bold text-slate-800 border-b border-slate-200 pb-1 mb-1.5">Violation Severity</div>
         <div className="flex items-center space-x-2">
           <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm shadow-red-500/50" />
-          <span className="text-slate-300">Compound / Triple Riding</span>
+          <span className="text-slate-700">Compound / Triple Riding</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50" />
-          <span className="text-slate-300">Helmet Violation</span>
+          <div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm shadow-blue-500/50" />
+          <span className="text-slate-700">Helmet Violation</span>
         </div>
         <div className="flex items-center space-x-2">
           <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50" />
-          <span className="text-slate-300">Drunk Driving / Sobriety</span>
+          <span className="text-slate-700">Drunk Driving / Sobriety</span>
         </div>
       </div>
     </div>

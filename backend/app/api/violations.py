@@ -39,6 +39,13 @@ async def create_violation(
     case_num = f"TRF-2026-{uuid.uuid4().hex[:6].upper()}"
     fine = calculate_fine(violation_data)
     
+    from backend.app.api.admin import REGISTERED_VEHICLES
+    owner_phone = None
+    for v in REGISTERED_VEHICLES:
+        if v.get("vehicle_number") == violation_data.vehicle_number.upper().strip():
+            owner_phone = v.get("owner_phone")
+            break
+            
     new_record = {
         "id": str(uuid.uuid4()),
         "case_number": case_num,
@@ -63,7 +70,8 @@ async def create_violation(
         "evidence_video_url": violation_data.evidence_video_url,
         "evidence_image_url": violation_data.evidence_image_url,
         "officer_remarks": violation_data.officer_remarks,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
+        "owner_phone": owner_phone
     }
     
     LOCAL_VIOLATIONS.insert(0, new_record)

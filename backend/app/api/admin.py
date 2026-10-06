@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
-from backend.app.models.schemas import AdminDashboardStats
+from backend.app.models.schemas import AdminDashboardStats, VehicleCreate
 from backend.app.utils.security import require_admin
 from backend.app.api.violations import LOCAL_VIOLATIONS
 
@@ -11,7 +11,9 @@ REGISTERED_VEHICLES = [
     {"vehicle_number": "TS07JH8821", "vehicle_type": "Scooter", "owner_name": "Sunita Sundaram", "owner_phone": "+91 91234 56780", "registration_status": "Active", "insurance_valid_until": "2026-12-01"},
     {"vehicle_number": "DL04BC8921", "vehicle_type": "Motorcycle", "owner_name": "Manish Gupta", "owner_phone": "+91 97112 34567", "registration_status": "Suspended", "insurance_valid_until": "2025-08-10"},
     {"vehicle_number": "KA05EQ7714", "vehicle_type": "Motorcycle", "owner_name": "Kiran Narayan", "owner_phone": "+91 94800 12345", "registration_status": "Active", "insurance_valid_until": "2028-01-30"},
-    {"vehicle_number": "MH12TR3321", "vehicle_type": "Motorcycle", "owner_name": "Aditya Joshi", "owner_phone": "+91 98220 99881", "registration_status": "Active", "insurance_valid_until": "2027-04-18"}
+    {"vehicle_number": "MH12TR3321", "vehicle_type": "Motorcycle", "owner_name": "Aditya Joshi", "owner_phone": "+91 98220 99881", "registration_status": "Active", "insurance_valid_until": "2027-04-18"},
+    {"vehicle_number": "AP9AL7175", "vehicle_type": "Scooter", "owner_name": "Priya Test", "owner_phone": "+91 99999 11111", "registration_status": "Active", "insurance_valid_until": "2028-12-31"},
+    {"vehicle_number": "TN998281", "vehicle_type": "Motorcycle", "owner_name": "Abdul Test", "owner_phone": "+91 99999 22222", "registration_status": "Active", "insurance_valid_until": "2026-10-31"}
 ]
 
 OFFICERS_LIST = [
@@ -77,3 +79,10 @@ async def list_officers(admin_user: dict = Depends(require_admin)):
 @router.get("/vehicles")
 async def list_vehicles(admin_user: dict = Depends(require_admin)):
     return REGISTERED_VEHICLES
+
+@router.post("/vehicles")
+async def create_vehicle(vehicle: VehicleCreate, admin_user: dict = Depends(require_admin)):
+    # Append the new vehicle to our mock database
+    new_vehicle = vehicle.dict()
+    REGISTERED_VEHICLES.append(new_vehicle)
+    return {"message": "Vehicle registered successfully", "vehicle": new_vehicle}

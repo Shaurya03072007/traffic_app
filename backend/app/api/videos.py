@@ -24,10 +24,10 @@ async def upload_and_process_video(
     4. Extracts frames and executes AI pipeline (YOLO + Tracker + Helmet + Triple Riding).
     5. Returns detection results with confidence and bounding boxes for officer review.
     """
-    if not file.content_type or not ("video" in file.content_type or file.filename.endswith(('.mp4', '.avi', '.mov', '.webm'))):
+    if not file.content_type or not ("video" in file.content_type or "image" in file.content_type or file.filename.endswith(('.mp4', '.avi', '.mov', '.webm', '.jpg', '.jpeg', '.png'))):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid video file format. Supported: MP4, AVI, MOV, WebM."
+            detail="Invalid file format. Supported: MP4, AVI, MOV, WebM, JPG, PNG."
         )
 
     case_id = f"TRF-2026-{uuid.uuid4().hex[:6].upper()}"

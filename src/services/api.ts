@@ -141,7 +141,9 @@ export const REGISTERED_VEHICLES: RegisteredVehicle[] = [
   { vehicleNumber: 'DL04BC8921', vehicleType: 'Motorcycle', ownerName: 'Manish Gupta', ownerPhone: '+91 97112 34567', registrationStatus: 'Suspended', insuranceValidUntil: '2025-08-10' },
   { vehicleNumber: 'KA05EQ7714', vehicleType: 'Motorcycle', ownerName: 'Kiran Narayan', ownerPhone: '+91 94800 12345', registrationStatus: 'Active', insuranceValidUntil: '2028-01-30' },
   { vehicleNumber: 'MH12TR3321', vehicleType: 'Motorcycle', ownerName: 'Aditya Joshi', ownerPhone: '+91 98220 99881', registrationStatus: 'Active', insuranceValidUntil: '2027-04-18' },
-  { vehicleNumber: 'AP28BK9001', vehicleType: 'Car', ownerName: 'Venkat Rao', ownerPhone: '+91 99490 88771', registrationStatus: 'Active', insuranceValidUntil: '2026-09-30' }
+  { vehicleNumber: 'AP28BK9001', vehicleType: 'Car', ownerName: 'Venkat Rao', ownerPhone: '+91 99490 88771', registrationStatus: 'Active', insuranceValidUntil: '2026-09-30' },
+  { vehicleNumber: 'AP9AL7175', vehicleType: 'Scooter', ownerName: 'Priya Test', ownerPhone: '+91 99999 11111', registrationStatus: 'Active', insuranceValidUntil: '2028-12-31' },
+  { vehicleNumber: 'TN998281', vehicleType: 'Motorcycle', ownerName: 'Abdul Test', ownerPhone: '+91 99999 22222', registrationStatus: 'Active', insuranceValidUntil: '2026-10-31' }
 ];
 
 export const POLICE_OFFICERS: PoliceOfficer[] = [

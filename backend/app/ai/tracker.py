@@ -62,7 +62,7 @@ class RiderMotorcycleAssociator:
             
         for person in persons:
             best_match = None
-            highest_score = 0.30 # Minimum association threshold
+            highest_score = 0.10 # Minimum association threshold
             
             for m_rec in results:
                 score = cls.calculate_association_score(person, m_rec["motorcycle"])

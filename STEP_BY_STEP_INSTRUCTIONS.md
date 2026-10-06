@@ -19,17 +19,20 @@ The system consists of three interconnected components running over your local W
 |   |    Kotlin + CameraX      |          |       React + Vite        |   |
 |   +------------+-------------+          +-------------+-------------+   |
 |                |                                      |                 |
-|   POST /videos/upload                    GET /violations, Dashboard     |
+|   POST /videos/upload (Video & Photos: MP4/JPG/PNG) |
 |   POST /violations                                    |                 |
 |                v                                      v                 |
 |   +-----------------------------------------------------------------+   |
 |   |                  FASTAPI PYTHON BACKEND SERVER                  |   |
 |   |                     Runs on: 192.168.X.X:8000                   |   |
 |   |                                                                 |   |
-|   |  - Video Processing & 4 FPS Frame Sampler                       |   |
-|   |  - YOLOv8 Object Detection (Motorcycles, Helmets, Riders)       |   |
-|   |  - Rider-Vehicle Spatial Centroid Associator (Triple Riding)    |   |
-|   |  - Number Plate OCR Localizer                                   |   |
+|   |  - Video/Image Processing Pipeline (OpenCV + 4 FPS Frame Sampler)|
+|   |  - YOLO26x Extra-Large NMS-Free Detector (Vehicles & Persons)   |   |
+|   |  - YOLO26x-Pose 17-Keypoint Skeletal Human Estimator            |   |
+|   |  - Verified Triple-Riding Skeletal Evaluator (Sec. 128 MVA)     |   |
+|   |  - Keypoint-Anchored Helmet Violation Engine (Sec. 129 MVA)     |   |
+|   |  - Optical License Plate Recognition + DB Cross-Reference       |   |
+|   |    (Marks unregistered numbers as "Unidentified in DB")         |   |
 |   |  - Role Resolution (Admin vs Officer)                           |   |
 |   +--------------------------------+--------------------------------+   |
 |                                    |                                    |
@@ -107,12 +110,20 @@ Ensure you have the following installed on Windows/Mac:
    python -m pip install --upgrade pip
    pip install -r requirements.txt
    ```
+   *(Note: The first time you run the backend, EasyOCR will automatically download two small English text-recognition models to your machine).*
 
-3. Download the open-source YOLO weights model:
+3. Download the state-of-the-art **YOLO26x Extra-Large** and **YOLO26x-Pose** models:
    ```powershell
-   python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+   python -c "from ultralytics import YOLO; YOLO('yolo26x.pt'); YOLO('yolo26x-pose.pt')"
    ```
-   *(This downloads `yolov8n.pt` ~6MB directly into your backend folder)*
+   *(This downloads `yolo26x.pt` [~113 MB] for end-to-end NMS-free vehicle/person detection and `yolo26x-pose.pt` [~120 MB] for 17-keypoint human skeletal tracking directly into your project).*
+
+4. Copy or store weights in the `models/` directory (automated by the system if left in the project root):
+   ```powershell
+   mkdir -p models
+   copy yolo26x.pt models\
+   copy yolo26x-pose.pt models\
+   ```
 
 ---
 
@@ -252,18 +263,18 @@ Follow this exact sequence to demonstrate the entire project to your examiner or
    - Badge Number: SI-4421
    - Actions: `[CAPTURE LIVE VIDEO]` and `[UPLOAD VIDEO]`
    - Recent shift cases.
-5. Tap **`[UPLOAD VIDEO]`** (or Capture Live Video) and select a video showing a motorcycle.
-6. The app uploads the video to the FastAPI server:
-   - Server runs YOLOv8 object detection on sampled 4 FPS frames.
-   - Algorithm tracks person centroids relative to the motorcycle seat plane.
-   - Evaluates whether head area contains an approved helmet shell.
-   - Evaluates rider count for Section 128 triple-riding infractions.
-   - Runs optical license plate character recognition (e.g. `TS09EA4412`).
+5. Tap **`[UPLOAD MEDIA]`** (or Capture Live Video) and select either a video (`.mp4`) or a high-resolution photograph (`.jpg`, `.png`) showing a two-wheeler.
+6. The app uploads the media to the FastAPI server:
+   - Server processes images or video frames through **YOLO26x Extra-Large** (with native Small-Target-Aware Label Assignment and end-to-end NMS-free inference).
+   - Employs **YOLO26x-Pose** to track 17 human skeletal keypoints (head, shoulders, hips) for every rider.
+   - Mathematically verifies rider count directly on the motorcycle seat for Section 128 triple-riding infractions.
+   - Anchors head inspection directly on the rider's neck/cranial keypoints to reliably detect helmet violations (Section 129).
+   - Runs optical license plate character recognition and cross-references against the Central Vehicle Registry. If the plate is not registered, it explicitly flags **"(Unidentified in DB)"**!
 7. The **CASE REVIEW SCREEN** opens:
-   - Vehicle Number: `TS09EA4412` (editable if OCR misread due to mud or angle).
+   - Vehicle Number: `TS09EA4412` or `DL01AB1234 (Unidentified in DB)` (editable if OCR misread due to mud or angle).
    - AI Detections:
-     - `☑ Helmet Violation (Confidence: 94%)`
-     - `☑ Triple Riding (Confidence: 91%)`
+     - `☑ Helmet Violation (Confidence: 96%)`
+     - `☑ Triple Riding (Confidence: 94% - Verified via YOLO26x Pose)`
    - Reviewer can uncheck any box if the officer determines the AI had a false detection!
    - Under **Officer Observations (Manual Human Finding)**, the officer can check:
      - `☑ Minor Rider` (Underage driving)
@@ -275,7 +286,7 @@ Follow this exact sequence to demonstrate the entire project to your examiner or
 
 ### Phase B: Administrative Command Review (Web Portal)
 1. On your PC, open `http://localhost:3000` (or `http://localhost:5173`).
-2. Log in using the central login form (remember: NO role dropdown!):
+2. Log in using the central official login form (designed with standard Ministry / NIC Government styling):
    - **Email:** `admin@trafficpolice.gov.in`
    - **Password:** `AdminPassword@123`
 3. Click **"AUTHENTICATE & ENTER PORTAL"**.
@@ -284,8 +295,8 @@ Follow this exact sequence to demonstrate the entire project to your examiner or
    - Live KPI counters: Total Cases, Today's Cases, Helmet Violations, Triple Riding, Drunk Driving cases, Fines Paid.
    - The newly submitted case appears at the top of the **Enforcement Cases Register**!
 6. Click **"INSPECT"** on the case:
-   - Case Details Modal opens showing the high-resolution evidence photo with detection bounding boxes overlay.
-   - Review AI confidence scores (`YOLOv8-TrafficCustom-v1.2`).
+   - Case Details Modal opens showing the high-resolution evidence photo with YOLO26x detection bounding boxes and skeletal joints overlay.
+   - Review AI confidence scores (`YOLO26x Extra-Large Engine + YOLO26x-Pose`).
    - Review the officer's manual observations (Minor rider, Drunk driving test results).
    - Switch to **GIS Radar Map** to view the exact intersection pin.
 7. Click **`[e-Challan Notice]`**:
