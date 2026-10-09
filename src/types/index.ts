@@ -8,6 +8,7 @@ export interface UserProfile {
   badgeNumber?: string;
   department?: string;
   phone?: string;
+  token?: string;
 }
 
 export interface BoundingBox {

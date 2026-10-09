@@ -1,16 +1,39 @@
+import os
+import json
 import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from backend.app.models.schemas import ViolationCreate, ViolationResponse, ViolationStatusUpdate
-from backend.app.utils.security import get_current_user, require_officer, require_admin
+from backend.app.utils.security import get_current_user, get_optional_current_user, require_officer, require_admin
 from backend.app.services.supabase_service import supabase_service
 from backend.app.utils.logging import logger
 
 router = APIRouter(prefix="/api/violations", tags=["Violations & Cases"])
 
-# In-memory violation repository initialized with seed cases
-LOCAL_VIOLATIONS: List[dict] = []
+STORAGE_FILE = Path("storage/violations.json")
+
+def _load_violations() -> List[dict]:
+    if STORAGE_FILE.exists():
+        try:
+            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data
+        except Exception as e:
+            logger.error(f"Failed to load violations cache: {e}")
+    return []
+
+def _save_violations(violations: List[dict]):
+    try:
+        STORAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(violations, f, indent=2, default=str)
+    except Exception as e:
+        logger.error(f"Failed to persist violations cache: {e}")
+
+# In-memory violation repository initialized with seed / persisted cases
+LOCAL_VIOLATIONS: List[dict] = _load_violations()
 
 def calculate_fine(data: ViolationCreate) -> int:
     """Calculates fine under Indian Motor Vehicles Amendment Act 2019."""
@@ -56,7 +79,7 @@ async def create_violation(
         "location": violation_data.location,
         "latitude": violation_data.latitude,
         "longitude": violation_data.longitude,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "helmet_violation": violation_data.helmet_violation,
         "triple_riding": violation_data.triple_riding,
         "ai_confidence": violation_data.ai_confidence,
@@ -70,11 +93,12 @@ async def create_violation(
         "evidence_video_url": violation_data.evidence_video_url,
         "evidence_image_url": violation_data.evidence_image_url,
         "officer_remarks": violation_data.officer_remarks,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "owner_phone": owner_phone
     }
     
     LOCAL_VIOLATIONS.insert(0, new_record)
+    _save_violations(LOCAL_VIOLATIONS)
     logger.info(f"Officer {current_user.get('email')} submitted case {case_num} for vehicle {new_record['vehicle_number']}")
     return new_record
 
@@ -82,7 +106,7 @@ async def create_violation(
 async def list_violations(
     status: Optional[str] = None,
     vehicle: Optional[str] = None,
-    user: dict = Depends(get_current_user)
+    user: Optional[dict] = Depends(get_optional_current_user)
 ):
     """
     Returns list of violations.
@@ -90,7 +114,7 @@ async def list_violations(
     """
     results = LOCAL_VIOLATIONS
     
-    if user.get("role") == "officer":
+    if user and user.get("role") == "officer":
         # Officer view: can see their cases
         officer_id = user.get("sub")
         badge = user.get("badge_number")
@@ -122,6 +146,7 @@ async def update_violation_status(
             v["status"] = update.status
             if update.officer_remarks:
                 v["officer_remarks"] = update.officer_remarks
+            _save_violations(LOCAL_VIOLATIONS)
             logger.info(f"Admin updated case {case_id} status to {update.status}")
             return v
     raise HTTPException(status_code=404, detail="Case record not found")

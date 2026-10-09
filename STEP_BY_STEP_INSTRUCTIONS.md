@@ -201,7 +201,7 @@ Because the Android application runs on a physical smartphone or emulator on you
 1. Make sure your virtual environment is active in PowerShell.
 2. In the `backend` folder, run:
    ```powershell
-   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 3. You should see:
    ```

@@ -209,3 +209,124 @@ export const DEMO_SCENARIOS: DemoVideoScenario[] = [
 
 // Helper to simulate API call latency
 export const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export function mapBackendViolationToRecord(v: any): ViolationRecord {
+  return {
+    id: v.id || `v-${Math.random()}`,
+    caseNumber: v.case_number || v.caseNumber || 'TRF-2026-UNKNOWN',
+    officerId: v.officer_id || v.officerId,
+    officerName: v.officer_name || v.officerName || 'Field Officer',
+    badgeNumber: v.badge_number || v.badgeNumber || 'SI-4421',
+    vehicleNumber: (v.vehicle_number || v.vehicleNumber || '').toUpperCase().trim(),
+    location: v.location || 'Cyber Towers Junction, Hitech City, Hyderabad',
+    latitude: typeof v.latitude === 'number' ? v.latitude : 17.4504,
+    longitude: typeof v.longitude === 'number' ? v.longitude : 78.3808,
+    timestamp: typeof v.timestamp === 'string' ? v.timestamp : new Date().toISOString(),
+    helmetViolation: Boolean(v.helmet_violation ?? v.helmetViolation),
+    tripleRiding: Boolean(v.triple_riding ?? v.tripleRiding),
+    aiConfidence: typeof v.ai_confidence === 'number' ? v.ai_confidence : (v.aiConfidence ?? 0.9),
+    minorRiding: Boolean(v.minor_riding ?? v.minorRiding),
+    noLicense: Boolean(v.no_license ?? v.noLicense),
+    drunkDriving: Boolean(v.drunk_driving ?? v.drunkDriving),
+    drunkDrivingNotes: v.drunk_driving_notes || v.drunkDrivingNotes,
+    status: v.status || 'Pending Review',
+    fineAmount: typeof v.fine_amount === 'number' ? v.fine_amount : (v.fineAmount ?? 1000),
+    challanDueDate: v.challan_due_date || v.challanDueDate || '2026-10-30',
+    evidenceVideoUrl: v.evidence_video_url || v.evidenceVideoUrl,
+    evidenceImageUrl: v.evidence_image_url || v.evidenceImageUrl,
+    officerRemarks: v.officer_remarks || v.officerRemarks,
+    modelName: v.model_name || v.modelName || 'YOLOv8-TrafficCustom-v1.2',
+    createdAt: typeof v.created_at === 'string' ? v.created_at : new Date().toISOString()
+  };
+}
+
+export async function fetchLiveViolations(token?: string): Promise<ViolationRecord[]> {
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Try proxied /api first, then direct fallback
+  const endpoints = ['/api/violations', 'http://127.0.0.1:8000/api/violations', 'http://localhost:8000/api/violations'];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          return data.map(mapBackendViolationToRecord);
+        }
+      }
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  return [];
+}
+
+export async function updateViolationStatusBackend(
+  caseId: string, 
+  status: string, 
+  remarks?: string, 
+  token?: string
+): Promise<boolean> {
+  const headers: Record<string, string> = { 
+    'Content-Type': 'application/json',
+    'Accept': 'application/json' 
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = [
+    `/api/violations/${caseId}`,
+    `http://127.0.0.1:8000/api/violations/${caseId}`,
+    `http://localhost:8000/api/violations/${caseId}`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status, officer_remarks: remarks })
+      });
+      if (res.ok) return true;
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  return false;
+}
+
+export async function loginBackend(email: string, password: string): Promise<{ user: UserProfile; token: string } | null> {
+  const endpoints = ['/api/auth/login', 'http://127.0.0.1:8000/api/auth/login', 'http://localhost:8000/api/auth/login'];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          token: data.access_token,
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            fullName: data.user.full_name,
+            role: data.user.role,
+            badgeNumber: data.user.badge_number,
+            department: data.user.department,
+            phone: data.user.phone
+          }
+        };
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  return null;
+}

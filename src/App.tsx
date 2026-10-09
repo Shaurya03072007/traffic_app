@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserProfile, ViolationRecord } from './types';
-import { INITIAL_VIOLATIONS, REGISTERED_VEHICLES, POLICE_OFFICERS } from './services/api';
+import { INITIAL_VIOLATIONS, REGISTERED_VEHICLES, POLICE_OFFICERS, fetchLiveViolations, updateViolationStatusBackend } from './services/api';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -23,6 +23,36 @@ export default function App() {
   const [violations, setViolations] = useState<ViolationRecord[]>(INITIAL_VIOLATIONS);
   const [vehicles, setVehicles] = useState(REGISTERED_VEHICLES);
   const [selectedCase, setSelectedCase] = useState<ViolationRecord | null>(null);
+
+  // Sync violations from backend server
+  const refreshViolations = useCallback(async () => {
+    try {
+      const live = await fetchLiveViolations(currentUser?.token);
+      if (live && live.length > 0) {
+        setViolations(prev => {
+          const map = new Map<string, ViolationRecord>();
+          // 1. Initial demo cases
+          INITIAL_VIOLATIONS.forEach(v => map.set(v.caseNumber, v));
+          // 2. Previously in-memory cases
+          prev.forEach(v => map.set(v.caseNumber, v));
+          // 3. Live backend cases (take precedence)
+          live.forEach(v => map.set(v.caseNumber, v));
+          return Array.from(map.values()).sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        });
+      }
+    } catch (e) {
+      console.warn("Could not sync live violations from backend:", e);
+    }
+  }, [currentUser?.token]);
+
+  // Fetch immediately on mount and periodically every 4 seconds
+  useEffect(() => {
+    refreshViolations();
+    const interval = setInterval(refreshViolations, 4000);
+    return () => clearInterval(interval);
+  }, [refreshViolations]);
 
   // AUTOMATIC ROLE ROUTING (Prompt Section 2 & 14):
   // "After login:
@@ -55,7 +85,7 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentUser?.id}` // mockup token
+          'Authorization': `Bearer ${currentUser?.token || currentUser?.id}`
         },
         body: JSON.stringify(newVehicle)
       });
@@ -69,13 +99,16 @@ export default function App() {
     }
   };
 
-  const handleUpdateStatus = (caseId: string, newStatus: ViolationRecord['status']) => {
+  const handleUpdateStatus = async (caseId: string, newStatus: ViolationRecord['status']) => {
     setViolations(prev =>
       prev.map(v => (v.id === caseId ? { ...v, status: newStatus } : v))
     );
     if (selectedCase && selectedCase.id === caseId) {
       setSelectedCase(prev => (prev ? { ...prev, status: newStatus } : null));
     }
+    // Update on backend server
+    await updateViolationStatusBackend(caseId, newStatus, undefined, currentUser?.token);
+    refreshViolations();
   };
 
   // If user is not authenticated, render the single login screen
@@ -104,6 +137,7 @@ export default function App() {
             officersList={POLICE_OFFICERS}
             onSelectCase={(v) => setSelectedCase(v)}
             onUpdateStatus={handleUpdateStatus}
+            onRefresh={refreshViolations}
           />
         )}
 

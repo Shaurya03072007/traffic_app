@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { Shield, Lock, Mail, ArrowRight, AlertCircle, Info, Sparkles, Server } from 'lucide-react';
+import { loginBackend } from '../services/api';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -12,22 +13,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Authenticate against central authentication layer (Supabase / local police registry)
-  const handleSubmit = (e: React.FormEvent) => {
+  // Authenticate against central authentication layer (FastAPI / Supabase / local registry)
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage(null);
 
-    setTimeout(() => {
-      const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
 
-      // Check against centralized role database
+    // 1. Try real backend authentication
+    try {
+      const res = await loginBackend(cleanEmail, password);
+      if (res) {
+        setIsLoading(false);
+        onLoginSuccess({
+          ...res.user,
+          token: res.token
+        });
+        return;
+      }
+    } catch {
+      // Backend offline, fallback to local test accounts
+    }
+
+    // 2. Fallback to local accounts
+    setTimeout(() => {
       if (cleanEmail === 'admin@trafficpolice.gov.in' && password === 'AdminPassword@123') {
         const adminProfile: UserProfile = {
           id: 'a0000000-0000-0000-0000-000000000001',
           email: 'admin@trafficpolice.gov.in',
           fullName: 'ACP R. K. Deshmukh',
-          role: 'admin', // Resolved server-side!
+          role: 'admin',
           badgeNumber: 'ACP-7701',
           department: 'HQ Traffic Enforcement & Intelligence Command',
           phone: '+91 98490 11223'
@@ -39,7 +55,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           id: 'b0000000-0000-0000-0000-000000000002',
           email: 'officer.sharma@trafficpolice.gov.in',
           fullName: 'Sub-Inspector Vikram Sharma',
-          role: 'officer', // Resolved server-side!
+          role: 'officer',
           badgeNumber: 'SI-4421',
           department: 'Cyberabad Traffic Patrol Division',
           phone: '+91 94401 55432'
@@ -62,7 +78,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         setIsLoading(false);
         setErrorMessage('Invalid police credentials. Please check your official email and password.');
       }
-    }, 600);
+    }, 400);
   };
 
   const setTestAccount = (userEmail: string, userPass: string) => {

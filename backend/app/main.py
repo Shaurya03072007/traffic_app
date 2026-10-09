@@ -5,6 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path("backend/.env"))
+    load_dotenv()
+except Exception:
+    pass
+
 from backend.app.api.auth import router as auth_router
 from backend.app.api.videos import router as videos_router
 from backend.app.api.violations import router as violations_router

@@ -37,6 +37,12 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     except JWTError:
         return None
 
+async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)) -> Optional[Dict[str, Any]]:
+    if not credentials:
+        return None
+    token = credentials.credentials
+    return decode_access_token(token)
+
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)) -> Dict[str, Any]:
     if not credentials:
         raise HTTPException(

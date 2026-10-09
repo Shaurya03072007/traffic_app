@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile, ViolationRecord, RegisteredVehicle, PoliceOfficer } from '../types';
 import { LeafletMap } from '../components/LeafletMap';
-import { Shield, AlertTriangle, HardHat, Users, FileCheck, Ban, DollarSign, Calendar, Search, Filter, Eye, ChevronRight, MapPin, Radio, Car, Award } from 'lucide-react';
+import { Shield, AlertTriangle, HardHat, Users, FileCheck, Ban, DollarSign, Calendar, Search, Filter, Eye, ChevronRight, MapPin, Radio, Car, Award, RefreshCw } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: UserProfile;
@@ -10,6 +10,7 @@ interface AdminDashboardProps {
   officersList: PoliceOfficer[];
   onSelectCase: (violation: ViolationRecord) => void;
   onUpdateStatus: (caseId: string, newStatus: ViolationRecord['status']) => void;
+  onRefresh?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -18,8 +19,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   registeredVehicles,
   officersList,
   onSelectCase,
-  onUpdateStatus
+  onUpdateStatus,
+  onRefresh
 }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [violationTypeFilter, setViolationTypeFilter] = useState<string>('ALL');
@@ -27,7 +30,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // KPI Calculations (Section 15)
   const totalCases = violations.length;
-  const todayCases = violations.filter(v => v.timestamp.includes('2026-09-29')).length || 2;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayCases = violations.filter(v => v.timestamp.includes(todayStr) || v.timestamp.includes('2026-09-29')).length || 1;
   const helmetViolations = violations.filter(v => v.helmetViolation).length;
   const tripleRidingCases = violations.filter(v => v.tripleRiding).length;
   const licenseViolations = violations.filter(v => v.noLicense).length;
@@ -298,6 +302,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <option value="LICENSE">No Licence</option>
               <option value="MINOR">Minor Rider</option>
             </select>
+
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsRefreshing(true);
+                  await onRefresh();
+                  setTimeout(() => setIsRefreshing(false), 500);
+                }}
+                title="Sync latest cases from police field app"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Sync Live</span>
+              </button>
+            )}
           </div>
         </div>
 
