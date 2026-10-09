@@ -22,8 +22,8 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeTab, setActiveTab, o
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-lg tracking-wide text-slate-900 font-mono">TRAFFIC<span className="text-blue-700">WATCH</span></span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-blue-700 font-mono border border-blue-600/20">
-                  {user.role === 'admin' ? 'HQ COMMAND' : 'FIELD PATROL'}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-blue-700 font-mono border border-blue-600/20 font-bold">
+                  {user.role === 'admin' ? 'HQ COMMAND' : user.role === 'citizen' ? 'CITIZEN PORTAL' : 'FIELD PATROL'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 hidden sm:block">AI Traffic Violation & Enforcement System</p>
@@ -67,6 +67,15 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeTab, setActiveTab, o
                   Vehicles
                 </button>
               </>
+            ) : user.role === 'citizen' ? (
+              <button
+                onClick={() => setActiveTab('citizen_portal')}
+                className={`px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  activeTab === 'citizen_portal' ? 'bg-blue-600/20 text-blue-700 border border-blue-600/40' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                My Vehicle Challans
+              </button>
             ) : (
               <button
                 onClick={() => setActiveTab('officer_workflow')}
@@ -104,15 +113,17 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeTab, setActiveTab, o
           <div className="flex items-center space-x-4">
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-xs font-semibold text-slate-800">{user.fullName}</span>
-              <span className="text-[11px] text-blue-700/90 font-mono">
-                {user.badgeNumber ? `Badge: ${user.badgeNumber}` : user.department || 'Enforcement'}
+              <span className="text-[11px] text-blue-700 font-mono font-bold">
+                {user.role === 'citizen' 
+                  ? `Plate: ${user.vehicleNumber}` 
+                  : user.badgeNumber ? `Badge: ${user.badgeNumber}` : user.department || 'Enforcement'}
               </span>
             </div>
 
             <button
               onClick={onLogout}
               title="Logout"
-              className="p-2 rounded-lg bg-slate-100 hover:bg-red-500/20 text-slate-600 hover:text-red-400 border border-slate-300 hover:border-red-500/30 transition-all"
+              className="p-2 rounded-lg bg-slate-100 hover:bg-red-500/20 text-slate-600 hover:text-red-400 border border-slate-300 hover:border-red-500/30 transition-all cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -129,6 +140,8 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeTab, setActiveTab, o
             <button onClick={() => setActiveTab('officers')} className={`px-2.5 py-1.5 rounded whitespace-nowrap ${activeTab === 'officers' ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'}`}>Officers</button>
             <button onClick={() => setActiveTab('vehicles')} className={`px-2.5 py-1.5 rounded whitespace-nowrap ${activeTab === 'vehicles' ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'}`}>Vehicles</button>
           </>
+        ) : user.role === 'citizen' ? (
+          <button onClick={() => setActiveTab('citizen_portal')} className={`px-2.5 py-1.5 rounded whitespace-nowrap ${activeTab === 'citizen_portal' ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'}`}>My Challans</button>
         ) : (
           <button onClick={() => setActiveTab('officer_workflow')} className={`px-2.5 py-1.5 rounded whitespace-nowrap ${activeTab === 'officer_workflow' ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'}`}>Officer Portal</button>
         )}

@@ -80,6 +80,16 @@ async def list_officers(admin_user: dict = Depends(require_admin)):
 async def list_vehicles(admin_user: dict = Depends(require_admin)):
     return REGISTERED_VEHICLES
 
+@router.get("/vehicles/{plate_number}")
+async def get_vehicle_by_plate(plate_number: str):
+    import re
+    norm = re.sub(r'[\s\-]', '', plate_number).upper()
+    for v in REGISTERED_VEHICLES:
+        if re.sub(r'[\s\-]', '', v.get("vehicle_number", "")).upper() == norm:
+            return v
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail=f"Vehicle '{plate_number}' not found")
+
 @router.post("/vehicles")
 async def create_vehicle(vehicle: VehicleCreate, admin_user: dict = Depends(require_admin)):
     # Append the new vehicle to our mock database

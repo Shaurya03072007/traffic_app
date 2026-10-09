@@ -119,6 +119,10 @@ async def list_violations(
         officer_id = user.get("sub")
         badge = user.get("badge_number")
         results = [v for v in results if v.get("officer_id") == officer_id or v.get("badge_number") == badge]
+    elif user and user.get("role") == "citizen":
+        # Citizen view: can only see violations matching their vehicle plate
+        v_num = (user.get("vehicle_number") or "").upper().strip()
+        results = [v for v in results if v.get("vehicle_number", "").upper().strip() == v_num]
         
     if status:
         results = [v for v in results if v.get("status") == status]
@@ -148,5 +152,29 @@ async def update_violation_status(
                 v["officer_remarks"] = update.officer_remarks
             _save_violations(LOCAL_VIOLATIONS)
             logger.info(f"Admin updated case {case_id} status to {update.status}")
+            return v
+    raise HTTPException(status_code=404, detail="Case record not found")
+
+@router.post("/{case_id}/pay", response_model=ViolationResponse)
+async def citizen_pay_challan(case_id: str, user: Optional[dict] = Depends(get_optional_current_user)):
+    """Allows vehicle owner to pay their e-Challan fine online."""
+    for v in LOCAL_VIOLATIONS:
+        if v["id"] == case_id or v["case_number"] == case_id:
+            v["status"] = "Fine Paid"
+            _save_violations(LOCAL_VIOLATIONS)
+            logger.info(f"Challan {case_id} marked as Paid by owner of vehicle {v['vehicle_number']}")
+            return v
+    raise HTTPException(status_code=404, detail="Case record not found")
+
+@router.post("/{case_id}/dispute", response_model=ViolationResponse)
+async def citizen_dispute_challan(case_id: str, dispute: ViolationStatusUpdate, user: Optional[dict] = Depends(get_optional_current_user)):
+    """Allows vehicle owner to contest/dispute a violation notice."""
+    for v in LOCAL_VIOLATIONS:
+        if v["id"] == case_id or v["case_number"] == case_id:
+            v["status"] = "Contested"
+            if dispute.officer_remarks:
+                v["officer_remarks"] = f"Citizen Dispute: {dispute.officer_remarks}"
+            _save_violations(LOCAL_VIOLATIONS)
+            logger.info(f"Challan {case_id} contested by citizen: {dispute.officer_remarks}")
             return v
     raise HTTPException(status_code=404, detail="Case record not found")

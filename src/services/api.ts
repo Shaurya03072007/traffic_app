@@ -240,12 +240,18 @@ export function mapBackendViolationToRecord(v: any): ViolationRecord {
   };
 }
 
-export async function fetchLiveViolations(token?: string): Promise<ViolationRecord[]> {
+export async function fetchLiveViolations(token?: string, vehicleNumber?: string): Promise<ViolationRecord[]> {
   const headers: Record<string, string> = { 'Accept': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  const query = vehicleNumber ? `?vehicle=${encodeURIComponent(vehicleNumber.trim())}` : '';
+
   // Try proxied /api first, then direct fallback
-  const endpoints = ['/api/violations', 'http://127.0.0.1:8000/api/violations', 'http://localhost:8000/api/violations'];
+  const endpoints = [
+    `/api/violations${query}`,
+    `http://127.0.0.1:8000/api/violations${query}`,
+    `http://localhost:8000/api/violations${query}`
+  ];
 
   for (const url of endpoints) {
     try {
@@ -298,6 +304,63 @@ export async function updateViolationStatusBackend(
   return false;
 }
 
+export async function payChallanBackend(caseId: string, token?: string): Promise<boolean> {
+  const headers: Record<string, string> = { 
+    'Content-Type': 'application/json',
+    'Accept': 'application/json' 
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = [
+    `/api/violations/${caseId}/pay`,
+    `http://127.0.0.1:8000/api/violations/${caseId}/pay`,
+    `http://localhost:8000/api/violations/${caseId}/pay`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers
+      });
+      if (res.ok) return true;
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  return false;
+}
+
+export async function disputeChallanBackend(caseId: string, remarks: string, token?: string): Promise<boolean> {
+  const headers: Record<string, string> = { 
+    'Content-Type': 'application/json',
+    'Accept': 'application/json' 
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = [
+    `/api/violations/${caseId}/dispute`,
+    `http://127.0.0.1:8000/api/violations/${caseId}/dispute`,
+    `http://localhost:8000/api/violations/${caseId}/dispute`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ officer_remarks: remarks })
+      });
+      if (res.ok) return true;
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  return false;
+}
+
 export async function loginBackend(email: string, password: string): Promise<{ user: UserProfile; token: string } | null> {
   const endpoints = ['/api/auth/login', 'http://127.0.0.1:8000/api/auth/login', 'http://localhost:8000/api/auth/login'];
 
@@ -329,4 +392,81 @@ export async function loginBackend(email: string, password: string): Promise<{ u
   }
 
   return null;
+}
+
+export async function citizenLoginBackend(vehicleNumber: string, phoneNumber: string): Promise<{ user: UserProfile; token: string; vehicle?: RegisteredVehicle } | null> {
+  const endpoints = ['/api/auth/citizen-login', 'http://127.0.0.1:8000/api/auth/citizen-login', 'http://localhost:8000/api/auth/citizen-login'];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicle_number: vehicleNumber, phone_number: phoneNumber })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const vInfo = data.user.vehicle_info ? {
+          vehicleNumber: data.user.vehicle_info.vehicle_number,
+          vehicleType: data.user.vehicle_info.vehicle_type,
+          ownerName: data.user.vehicle_info.owner_name,
+          ownerPhone: data.user.vehicle_info.owner_phone,
+          registrationStatus: data.user.vehicle_info.registration_status,
+          insuranceValidUntil: data.user.vehicle_info.insurance_valid_until
+        } : undefined;
+
+        return {
+          token: data.access_token,
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            fullName: data.user.full_name,
+            role: 'citizen',
+            phone: data.user.phone,
+            vehicleNumber: data.user.vehicle_number || vehicleNumber,
+            vehicle: vInfo
+          },
+          vehicle: vInfo
+        };
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  return null;
+}
+
+export async function fetchVehicleDetails(plateNumber: string): Promise<RegisteredVehicle | null> {
+  const cleanPlate = plateNumber.replace(/[\s-]/g, '').toUpperCase();
+  const endpoints = [
+    `/api/admin/vehicles/${cleanPlate}`,
+    `http://127.0.0.1:8000/api/admin/vehicles/${cleanPlate}`,
+    `http://localhost:8000/api/admin/vehicles/${cleanPlate}`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          vehicleNumber: data.vehicle_number,
+          vehicleType: data.vehicle_type,
+          ownerName: data.owner_name,
+          ownerPhone: data.owner_phone,
+          registrationStatus: data.registration_status,
+          insuranceValidUntil: data.insurance_valid_until
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback to local REGISTERED_VEHICLES
+  const match = REGISTERED_VEHICLES.find(
+    v => v.vehicleNumber.replace(/[\s-]/g, '').toUpperCase() === cleanPlate
+  );
+  return match || null;
 }

@@ -16,6 +16,7 @@ import { VehiclesDirectory } from './components/VehiclesDirectory';
 import { DemoVideoLab } from './components/DemoVideoLab';
 import { ArchitectureViewer } from './components/ArchitectureViewer';
 import { CaseDetailsModal } from './components/CaseDetailsModal';
+import { CitizenPortal } from './pages/CitizenPortal';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -27,7 +28,10 @@ export default function App() {
   // Sync violations from backend server
   const refreshViolations = useCallback(async () => {
     try {
-      const live = await fetchLiveViolations(currentUser?.token);
+      const live = await fetchLiveViolations(
+        currentUser?.token,
+        currentUser?.role === 'citizen' ? currentUser?.vehicleNumber : undefined
+      );
       if (live && live.length > 0) {
         setViolations(prev => {
           const map = new Map<string, ViolationRecord>();
@@ -45,7 +49,7 @@ export default function App() {
     } catch (e) {
       console.warn("Could not sync live violations from backend:", e);
     }
-  }, [currentUser?.token]);
+  }, [currentUser?.token, currentUser?.role, currentUser?.vehicleNumber]);
 
   // Fetch immediately on mount and periodically every 4 seconds
   useEffect(() => {
@@ -54,15 +58,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [refreshViolations]);
 
-  // AUTOMATIC ROLE ROUTING (Prompt Section 2 & 14):
-  // "After login:
-  //  IF role == 'admin': automatically redirect to /admin/dashboard
-  //  IF role == 'officer': automatically redirect to the appropriate officer interface
-  //  The UI must never ask the user to choose their role."
+  // AUTOMATIC ROLE ROUTING:
+  // IF role == 'admin': automatically redirect to /admin/dashboard
+  // IF role == 'citizen': automatically redirect to citizen_portal
+  // IF role == 'officer': automatically redirect to officer_workflow
   const handleLoginSuccess = (user: UserProfile) => {
     setCurrentUser(user);
     if (user.role === 'admin') {
       setActiveTab('dashboard');
+    } else if (user.role === 'citizen') {
+      setActiveTab('citizen_portal');
     } else {
       setActiveTab('officer_workflow');
     }
@@ -128,6 +133,17 @@ export default function App() {
 
       {/* Main View Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Citizen Portal */}
+        {activeTab === 'citizen_portal' && currentUser.role === 'citizen' && (
+          <CitizenPortal
+            user={currentUser}
+            violations={violations}
+            onRefreshViolations={refreshViolations}
+            onSelectCase={(v) => setSelectedCase(v)}
+            onUpdateStatus={handleUpdateStatus}
+          />
+        )}
+
         {/* Admin Dashboard */}
         {activeTab === 'dashboard' && (
           <AdminDashboard

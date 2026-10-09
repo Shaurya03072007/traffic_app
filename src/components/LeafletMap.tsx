@@ -8,10 +8,43 @@ interface LeafletMapProps {
   selectedCaseId?: string;
 }
 
+const GEOAPIFY_API_KEY =
+  (import.meta as any).env?.VITE_GEOAPIFY_API_KEY ||
+  'eyJhbGciOiJIUzI1NiJ9.eyJhIjoiYWNfcHMwZHYwc2EiLCJqdGkiOiI2OTVhMzY1NTU0ZDA5ZDAwMmNiYmFmYTNlYWVhMTFjYSJ9.4IEd2aL84ztGIFx3LlSiv3XTo_AqwWF2d6px9f9-9tk';
+
 export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase, selectedCaseId }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [mapStyle, setMapStyle] = React.useState<'dark' | 'streets' | 'satellite'>('dark');
+
+  const getTileConfig = (style: 'dark' | 'streets' | 'satellite') => {
+    switch (style) {
+      case 'streets':
+        return {
+          url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          subdomains: 'abc',
+          className: '',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        };
+      case 'satellite':
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          subdomains: 'abcd',
+          className: '',
+          attribution: 'Tiles &copy; Esri World Imagery'
+        };
+      case 'dark':
+      default:
+        return {
+          url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          subdomains: 'abc',
+          className: 'radar-dark-tiles',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        };
+    }
+  };
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -24,13 +57,15 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase
         zoomControl: true,
       });
 
-      // CartoDB Dark Matter tiles for modern government dark mode aesthetic
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
+      const config = getTileConfig(mapStyle);
+      const tiles = L.tileLayer(config.url, {
+        attribution: config.attribution,
+        subdomains: config.subdomains,
+        className: config.className,
         maxZoom: 19
       }).addTo(map);
 
+      tileLayerRef.current = tiles;
       markersRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
     }
@@ -39,6 +74,21 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase
       // cleanup on unmount
     };
   }, []);
+
+  // Update tile style when selected
+  useEffect(() => {
+    if (tileLayerRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(tileLayerRef.current);
+      const config = getTileConfig(mapStyle);
+      const newTiles = L.tileLayer(config.url, {
+        attribution: config.attribution,
+        subdomains: config.subdomains,
+        className: config.className,
+        maxZoom: 19
+      }).addTo(mapInstanceRef.current);
+      tileLayerRef.current = newTiles;
+    }
+  }, [mapStyle]);
 
   // Update markers when violations change
   useEffect(() => {
@@ -149,6 +199,38 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ violations, onSelectCase
     <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden border border-slate-200 shadow-xl bg-white">
       <div ref={mapContainerRef} className="w-full h-full min-h-[420px]" />
       
+      {/* Top Left: GIS Status & Layer Selector */}
+      <div className="absolute top-4 left-14 z-[1000] flex flex-wrap items-center gap-2">
+        <div className="bg-slate-900/90 text-white backdrop-blur-md border border-slate-700/60 px-3 py-1.5 rounded-lg text-xs flex items-center space-x-2 shadow-lg">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-mono font-semibold">GIS Engine Active</span>
+        </div>
+
+        <div className="bg-slate-900/90 text-white backdrop-blur-md border border-slate-700/60 p-1 rounded-lg text-xs flex items-center space-x-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => setMapStyle('dark')}
+            className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${mapStyle === 'dark' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-300 hover:text-white'}`}
+          >
+            Radar Dark
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle('streets')}
+            className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${mapStyle === 'streets' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
+          >
+            Streets
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle('satellite')}
+            className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${mapStyle === 'satellite' ? 'bg-emerald-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
+          >
+            Satellite
+          </button>
+        </div>
+      </div>
+
       {/* Legend Badge Overlay */}
       <div className="absolute top-4 right-4 z-[1000] bg-white/90 backdrop-blur-md border border-slate-200 p-3 rounded-lg text-xs space-y-1.5 shadow-lg">
         <div className="font-bold text-slate-800 border-b border-slate-200 pb-1 mb-1.5">Violation Severity</div>

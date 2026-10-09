@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'officer';
+export type UserRole = 'admin' | 'officer' | 'citizen';
 
 export interface UserProfile {
   id: string;
@@ -8,6 +8,8 @@ export interface UserProfile {
   badgeNumber?: string;
   department?: string;
   phone?: string;
+  vehicleNumber?: string;
+  vehicle?: RegisteredVehicle;
   token?: string;
 }
 

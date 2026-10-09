@@ -7,14 +7,20 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class CitizenLoginRequest(BaseModel):
+    vehicle_number: str
+    phone_number: str
+
 class UserProfile(BaseModel):
     id: str
     email: str
     full_name: str
-    role: str # "admin" | "officer"
+    role: str # "admin" | "officer" | "citizen"
     badge_number: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    vehicle_info: Optional[Dict[str, Any]] = None
 
 class AuthResponse(BaseModel):
     access_token: str
