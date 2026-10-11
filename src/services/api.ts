@@ -470,3 +470,51 @@ export async function fetchVehicleDetails(plateNumber: string): Promise<Register
   );
   return match || null;
 }
+
+export async function uploadVideoToBackend(file: File, token?: string): Promise<any | null> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = ['/api/videos/upload', 'http://127.0.0.1:8000/api/videos/upload'];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn(`Upload attempt failed on ${url}:`, e);
+    }
+  }
+  return null;
+}
+
+export async function submitViolationBackend(data: any, token?: string): Promise<any | null> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = ['/api/violations', 'http://127.0.0.1:8000/api/violations'];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+

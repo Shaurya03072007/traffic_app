@@ -131,13 +131,14 @@ async def citizen_login(credentials: CitizenLoginRequest):
     if len(phone_digits) < 10:
         raise HTTPException(status_code=400, detail="Please enter a valid 10-digit mobile number.")
 
-    # 1. Search in Registered Vehicles
-    matched_vehicle = None
-    for v in REGISTERED_VEHICLES:
-        v_plate = re.sub(r'[\s\-]', '', v.get("vehicle_number", "")).upper()
-        if v_plate == plate_input:
-            matched_vehicle = v
-            break
+    # 1. Search in Supabase Vehicles first
+    matched_vehicle = supabase_service.get_vehicle_by_plate(plate_input)
+    if not matched_vehicle:
+        for v in REGISTERED_VEHICLES:
+            v_plate = re.sub(r'[\s\-]', '', v.get("vehicle_number", "")).upper()
+            if v_plate == plate_input:
+                matched_vehicle = v
+                break
 
     # 2. Search in Violations if not in vehicles
     matched_violation_phone = None

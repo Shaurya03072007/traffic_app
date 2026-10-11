@@ -412,12 +412,18 @@ class LicensePlateRecognizer:
         is_registered = False
         owner_name = None
         try:
-            from backend.app.api.admin import REGISTERED_VEHICLES
-            for v in REGISTERED_VEHICLES:
-                if v.get("vehicle_number") == best_plate:
-                    is_registered = True
-                    owner_name = v.get("owner_name")
-                    break
+            from backend.app.services.supabase_service import supabase_service
+            db_v = supabase_service.get_vehicle_by_plate(best_plate)
+            if db_v:
+                is_registered = True
+                owner_name = db_v.get("owner_name")
+            else:
+                from backend.app.api.admin import REGISTERED_VEHICLES
+                for v in REGISTERED_VEHICLES:
+                    if v.get("vehicle_number") == best_plate:
+                        is_registered = True
+                        owner_name = v.get("owner_name")
+                        break
         except Exception:
             pass
 

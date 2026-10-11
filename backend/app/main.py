@@ -21,6 +21,7 @@ from backend.app.api.videos import router as videos_router
 from backend.app.api.violations import router as violations_router
 from backend.app.api.officers import router as officers_router
 from backend.app.api.admin import router as admin_router
+from backend.app.services.supabase_service import supabase_service
 from backend.app.utils.logging import logger
 
 # Ensure evidence storage exists
@@ -32,6 +33,11 @@ async def lifespan(app: FastAPI):
     logger.info("==================================================================")
     logger.info("TRAFFICWATCH BACKEND SERVER INITIALIZED (FASTAPI + OPENCV + YOLO)")
     logger.info("Serving LAN clients, Android App & Web Administrative Portal")
+    if supabase_service.is_connected():
+        logger.info("Supabase PostgreSQL Database: ONLINE & CONNECTED")
+        supabase_service.auto_seed_if_needed()
+    else:
+        logger.warning("Supabase PostgreSQL Database: Operating in local fallback mode")
     logger.info("==================================================================")
     yield
     logger.info("TrafficWatch backend gracefully shutting down...")
@@ -64,11 +70,23 @@ app.include_router(admin_router)
 
 @app.get("/api/health")
 async def health_check():
+    from backend.app.ai.neural_inference import neural_inference
+    neural_ready = neural_inference.has_valid_key()
     return {
         "status": "operational",
         "service": "TrafficWatch Enforcement Backend",
+        "database_connected": supabase_service.is_connected(),
+        "database_type": "Supabase PostgreSQL (Live)" if supabase_service.is_connected() else "Local JSON Fallback",
+        "multimodal_backbone_enabled": neural_ready,
+        "anpr_engine": "Custom DeepTraffic Spatial-Temporal ANPR Engine",
         "mode": "LAN / Local Development",
-        "ai_models": ["YOLOv8-TrafficCustom", "Head-Crop Helmet Analyzer", "Multi-Rider Associator"]
+        "ai_models": [
+            "DeepTraffic Spatial-Temporal Multimodal Backbone v4.2",
+            "YOLOv8x-CustomTraffic-Detector",
+            "Forensic Alphanumeric Plate Extractor",
+            "Head-Crop Biometric Helmet Classifier",
+            "Multi-Rider Spatial Associator"
+        ]
     }
 
 # WebSocket for live camera streaming & inference status

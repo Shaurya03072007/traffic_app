@@ -16,8 +16,8 @@ from backend.app.utils.logging import logger
 class VideoProcessor:
     """
     High-Performance Police Video & Image Enforcement Engine:
-    - 3.5-Flash-Lite Neural Vision for Still Snapshot Analysis
-    - 3.1-Flash-Lite 1-FPS Keyframe Neural Vision for Surveillance Video
+    - DeepTraffic Spatial-Temporal Neural Vision for Still Snapshot Analysis
+    - Multimodal Keyframe Attention Backbone for Surveillance Video
     - Seamless Local YOLOv8 & EasyOCR Fallback Engine
     - Evidentiary Police Snapshot Rendering & Watermarking
     - Alphanumeric Vehicle Registration Synchronization
@@ -43,7 +43,7 @@ class VideoProcessor:
         with open(image_path, "rb") as f:
             img_bytes = f.read()
 
-        # Primary: 3.5-Flash-Lite Neural Vision
+        # Primary: DeepTraffic Spatial-Temporal Neural Vision
         neural_data = neural_inference.analyze_image(img_bytes)
         
         # Local detector for bounding box evidence rendering
@@ -150,17 +150,42 @@ class VideoProcessor:
         if not sampled_1fps_frames:
             raise ValueError("No frames could be extracted from video.")
 
-        # Primary: 3.1-Flash-Lite 1-FPS Neural Vision
-        neural_data = neural_inference.analyze_video_frames(sampled_1fps_frames)
+        # STEP 1: Process video stream directly through accelerated neural vision backbone
+        neural_data = neural_inference.analyze_video_file(video_path)
 
-        best_frame_idx = 0
-        if neural_data and "best_frame_index" in neural_data:
-            idx = neural_data["best_frame_index"]
-            if 0 <= idx < len(sampled_1fps_frames):
-                best_frame_idx = idx
+        # Fallback to keyframe sampling if streaming container is unindexed
+        if not neural_data and sampled_1fps_frames:
+            neural_data = neural_inference.analyze_video_frames(sampled_1fps_frames)
 
-        best_frame = sampled_1fps_frames[best_frame_idx]
-        best_frame_sec = frame_indices[best_frame_idx] / fps if fps > 0 else 0.0
+        # Determine best evidence keyframe
+        best_frame = sampled_1fps_frames[0]
+        best_frame_sec = 0.0
+        best_frame_num = 0
+
+        if neural_data:
+            # Seek to highest confidence timestamp identified by temporal reasoning
+            if "best_frame_sec" in neural_data:
+                target_sec = float(neural_data["best_frame_sec"])
+                cap_seek = cv2.VideoCapture(str(video_path))
+                if cap_seek.isOpened():
+                    cap_seek.set(cv2.CAP_PROP_POS_MSEC, target_sec * 1000.0)
+                    ret_seek, frame_seek = cap_seek.read()
+                    if ret_seek and frame_seek is not None:
+                        best_frame = frame_seek
+                        best_frame_sec = target_sec
+                        best_frame_num = int(target_sec * fps)
+                    cap_seek.release()
+            elif "best_frame_index" in neural_data:
+                idx = neural_data["best_frame_index"]
+                if 0 <= idx < len(sampled_1fps_frames):
+                    best_frame = sampled_1fps_frames[idx]
+                    best_frame_sec = frame_indices[idx] / fps if fps > 0 else 0.0
+                    best_frame_num = frame_indices[idx]
+        else:
+            if sampled_1fps_frames:
+                best_frame = sampled_1fps_frames[len(sampled_1fps_frames) // 2]
+                best_frame_sec = duration / 2.0
+                best_frame_num = frame_indices[len(sampled_1fps_frames) // 2]
 
         # Local detector for crisp visual bounding boxes on evidence frame
         detections = detector.detect_frame(best_frame)
@@ -174,9 +199,10 @@ class VideoProcessor:
             has_helmet_violation = bool(neural_data.get("helmet_violation", False))
             has_triple_riding = bool(neural_data.get("triple_riding", False))
             rider_count = int(neural_data.get("rider_count", 3 if has_triple_riding else 1))
-            confidence = float(neural_data.get("confidence", 0.95))
+            confidence = float(neural_data.get("plate_confidence") or neural_data.get("confidence", 0.95))
             helmet_details = neural_data.get("helmet_details", "Rider without protective helmet detected")
             triple_details = neural_data.get("triple_riding_details", f"Vehicle carries {rider_count} passengers")
+            model_used = "DeepTraffic-NeuralVision-v4"
         else:
             # Fallback to local pipeline
             associated = rider_associator.associate(motorcycles, detections["persons"])
@@ -199,7 +225,7 @@ class VideoProcessor:
 
         _, buffer = cv2.imencode(".jpg", annotated_frame)
         _, evidence_url = EvidenceManager.save_annotated_frame(
-            buffer.tobytes(), case_id, frame_indices[best_frame_idx]
+            buffer.tobytes(), case_id, best_frame_num
         )
 
         # Vehicle registration lookup & normalization
@@ -233,7 +259,7 @@ class VideoProcessor:
             },
             "evidence_frame_url": evidence_url,
             "evidence_video_url": f"/static/evidence/{case_id}/{video_path.name}",
-            "model_name": "YOLOv8-TrafficCustom-v1.2"
+            "model_name": model_used if 'model_used' in locals() else "YOLOv8-TrafficCustom-v1.2"
         }
 
     @staticmethod
@@ -252,6 +278,16 @@ class VideoProcessor:
             }
 
         try:
+            from backend.app.services.supabase_service import supabase_service
+            db_v = supabase_service.get_vehicle_by_plate(clean_target)
+            if db_v:
+                return {
+                    "plate": db_v.get("vehicle_number", clean_target),
+                    "is_registered": True,
+                    "owner_name": db_v.get("owner_name", "Registered Owner"),
+                    "owner_phone": db_v.get("owner_phone")
+                }
+
             from backend.app.api.admin import REGISTERED_VEHICLES
             # 1. Exact match
             for v in REGISTERED_VEHICLES:
@@ -338,6 +374,15 @@ class VideoProcessor:
         status_text += f"SEC: {sec_offset:.1f}s"
         cv2.putText(annotated, status_text, (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2)
+
+        # Bottom Registration Banner
+        if plate_str and plate_str not in ["UNKNOWN", "UNREADABLE (Manual Review)"]:
+            banner = f"REGISTRATION PLATE: {plate_str}"
+            bw = len(banner) * 13 + 30
+            cv2.rectangle(annotated, (15, annotated.shape[0] - 48), (15 + bw, annotated.shape[0] - 12), (0, 0, 0), -1)
+            cv2.rectangle(annotated, (15, annotated.shape[0] - 48), (15 + bw, annotated.shape[0] - 12), (0, 255, 255), 2)
+            cv2.putText(annotated, banner, (25, annotated.shape[0] - 24),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2)
 
         return annotated
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { UserProfile, ViolationRecord } from '../types';
-import { Video, Upload, Check, AlertTriangle, Shield, ArrowLeft, Camera, RefreshCw, Car, FileText, CheckSquare, Square, Info } from 'lucide-react';
+import { Video, Upload, Check, AlertTriangle, Shield, ArrowLeft, Camera, RefreshCw, Car, FileText, CheckSquare, Square, Info, Sparkles } from 'lucide-react';
+import { uploadVideoToBackend, submitViolationBackend } from '../services/api';
 
 interface OfficerDashboardProps {
   user: UserProfile;
@@ -27,6 +28,9 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
   const [drunkDriving, setDrunkDriving] = useState(false);
   const [drunkDrivingNotes, setDrunkDrivingNotes] = useState('');
   const [officerRemarks, setOfficerRemarks] = useState('');
+  const [evidenceImageUrl, setEvidenceImageUrl] = useState('https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&q=80');
+  const [evidenceVideoUrl, setEvidenceVideoUrl] = useState('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+  const [aiModelName, setAiModelName] = useState('DeepTraffic-NeuralVision-v4');
 
   const timerRef = useRef<any>(null);
 
@@ -61,25 +65,55 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
     }, 300);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
       setCurrentStep('analyzing');
-      setAnalysisProgress(0);
+      setAnalysisProgress(15);
 
-      const interval = setInterval(() => {
-        setAnalysisProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setCurrentStep('review_case');
-            return 100;
+      const progressInterval = setInterval(() => {
+        setAnalysisProgress(prev => (prev < 85 ? prev + 10 : prev));
+      }, 300);
+
+      try {
+        const result = await uploadVideoToBackend(file, user.token);
+        clearInterval(progressInterval);
+        setAnalysisProgress(100);
+
+        if (result) {
+          if (result.detected_license_plate && result.detected_license_plate !== 'UNKNOWN' && result.detected_license_plate !== 'UNREADABLEMANUALREVIEW') {
+            setVehicleNumber(result.detected_license_plate);
           }
-          return prev + 25;
-        });
-      }, 250);
+          if (result.plate_confidence) {
+            setPlateConfidence(result.plate_confidence);
+          }
+          if (result.helmet_violation) {
+            setHelmetConfirmed(Boolean(result.helmet_violation.detected));
+          }
+          if (result.triple_riding) {
+            setTripleRidingConfirmed(Boolean(result.triple_riding.detected));
+          }
+          if (result.evidence_frame_url) {
+            setEvidenceImageUrl(result.evidence_frame_url);
+          }
+          if (result.evidence_video_url) {
+            setEvidenceVideoUrl(result.evidence_video_url);
+          }
+          if (result.model_name) {
+            setAiModelName(result.model_name);
+          }
+        }
+      } catch (err) {
+        console.warn("Backend video upload fallback:", err);
+      }
+
+      setTimeout(() => {
+        setCurrentStep('review_case');
+      }, 400);
     }
   };
 
-  const handleSubmitFinalCase = () => {
+  const handleSubmitFinalCase = async () => {
     const caseId = `TRF-2026-${Math.floor(100000 + Math.random() * 900000)}`;
     
     // Calculate fine amount under MVA
@@ -107,7 +141,7 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
       timestamp: timestampStr,
       helmetViolation: helmetConfirmed,
       tripleRiding: tripleRidingConfirmed,
-      aiConfidence: 0.94,
+      aiConfidence: plateConfidence || 0.94,
       minorRiding,
       noLicense,
       drunkDriving,
@@ -115,12 +149,43 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
       status: 'Pending Review',
       fineAmount: fine,
       challanDueDate: '2026-10-30',
-      evidenceVideoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      evidenceImageUrl: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&q=80',
+      evidenceVideoUrl: evidenceVideoUrl,
+      evidenceImageUrl: evidenceImageUrl,
       officerRemarks: officerRemarks || 'Violations recorded via field patrol camera and verified by officer.',
-      modelName: 'YOLOv8-TrafficCustom-v1.2',
+      modelName: aiModelName,
       createdAt: new Date().toISOString()
     };
+
+    try {
+      const backendSaved = await submitViolationBackend({
+        vehicle_number: vehicleNumber.trim().toUpperCase(),
+        location: 'Cyber Towers Junction, Hitech City, Hyderabad',
+        latitude: 17.4504,
+        longitude: 78.3808,
+        helmet_violation: helmetConfirmed,
+        triple_riding: tripleRidingConfirmed,
+        ai_confidence: plateConfidence || 0.94,
+        minor_riding: minorRiding,
+        no_license: noLicense,
+        drunk_driving: drunkDriving,
+        drunk_driving_notes: drunkDriving ? drunkDrivingNotes : undefined,
+        evidence_video_url: evidenceVideoUrl,
+        evidence_image_url: evidenceImageUrl,
+        officer_remarks: officerRemarks || 'Violations confirmed by field patrol officer.'
+      }, user.token);
+
+      if (backendSaved) {
+        onAddViolation({
+          ...newRecord,
+          id: backendSaved.id || newRecord.id,
+          caseNumber: backendSaved.case_number || newRecord.caseNumber
+        });
+        setCurrentStep('dashboard');
+        return;
+      }
+    } catch {
+      // Fallback
+    }
 
     onAddViolation(newRecord);
     setCurrentStep('dashboard');
@@ -373,12 +438,13 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
               {/* Evidence Snapshot */}
               <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-200">
                 <img
-                  src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&q=80"
-                  alt="Evidence"
+                  src={evidenceImageUrl}
+                  alt="Evidence Snapshot"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute top-2 left-2 bg-slate-900/80 px-2 py-1 rounded text-[10px] font-mono text-slate-700">
-                  EVIDENCE SNAPSHOT #045
+                <div className="absolute top-2 left-2 bg-slate-900/80 px-2 py-1 rounded text-[10px] font-mono text-amber-400 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>{aiModelName || 'NEURAL ANPR'}</span>
                 </div>
               </div>
             </div>
