@@ -41,6 +41,7 @@ class AIDetectionItem(BaseModel):
     bounding_box: Optional[BoundingBox] = None
 
 class VideoDetectionsResult(BaseModel):
+    model_config = {"protected_namespaces": ()}
     case_id: str
     processed_frames: int
     duration_seconds: float

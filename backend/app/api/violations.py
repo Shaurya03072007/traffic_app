@@ -62,10 +62,13 @@ async def create_violation(
     case_num = f"TRF-2026-{uuid.uuid4().hex[:6].upper()}"
     fine = calculate_fine(violation_data)
     
+    import re
     from backend.app.api.admin import REGISTERED_VEHICLES
     owner_phone = None
+    clean_req = re.sub(r'[^A-Z0-9]', '', violation_data.vehicle_number.upper())
     for v in REGISTERED_VEHICLES:
-        if v.get("vehicle_number") == violation_data.vehicle_number.upper().strip():
+        clean_reg = re.sub(r'[^A-Z0-9]', '', v.get("vehicle_number", "").upper())
+        if clean_reg == clean_req:
             owner_phone = v.get("owner_phone")
             break
             

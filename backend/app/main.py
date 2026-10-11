@@ -12,6 +12,10 @@ try:
 except Exception:
     pass
 
+# Run automated pre-flight bootstrap: checks libraries & downloads models if missing
+from backend.app.utils.bootstrap import ensure_system_ready
+ensure_system_ready()
+
 from backend.app.api.auth import router as auth_router
 from backend.app.api.videos import router as videos_router
 from backend.app.api.violations import router as violations_router

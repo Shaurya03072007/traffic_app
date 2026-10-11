@@ -154,12 +154,9 @@ The web portal and Android app use a single login screen. The backend automatica
 ## 6. QUICK START COMMANDS
 
 ### Start Backend (Python FastAPI):
+From the project root:
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate    # or .\venv\Scripts\activate on Windows
-pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Start Web Portal (React + Vite):
