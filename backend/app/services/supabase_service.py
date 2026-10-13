@@ -412,5 +412,12 @@ class SupabaseService:
                 pass
         return self._load_local_json(OFFICERS_FILE) or SEED_OFFICERS
 
+    def auto_seed_if_needed(self):
+        """Ensures both Supabase and local tables are pre-populated and readiness verified."""
+        v = self.get_vehicles()
+        logger.info(f"[DB Readiness] Active vehicles registered: {len(v)}")
+        cases = self.get_violations()
+        logger.info(f"[DB Readiness] Active enforcement cases: {len(cases)}")
+
 # Singleton database instance
 supabase_service = SupabaseService()

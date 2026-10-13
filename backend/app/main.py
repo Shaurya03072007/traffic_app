@@ -36,7 +36,8 @@ async def lifespan(app: FastAPI):
     logger.info("Serving LAN clients, Android App & Web Administrative Portal")
     if supabase_service.is_connected():
         logger.info("Supabase PostgreSQL Database: ONLINE & CONNECTED")
-        supabase_service.auto_seed_if_needed()
+        if hasattr(supabase_service, "auto_seed_if_needed"):
+            supabase_service.auto_seed_if_needed()
     else:
         logger.warning("Supabase PostgreSQL Database: Operating in local fallback mode")
     logger.info("==================================================================")
