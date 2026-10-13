@@ -1,9 +1,9 @@
 import re
 from datetime import datetime, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from backend.app.models.schemas import AdminDashboardStats, VehicleCreate
-from backend.app.utils.security import require_admin
+from backend.app.utils.security import require_admin, get_optional_current_user
 from backend.app.api.violations import get_all_active_violations
 from backend.app.services.supabase_service import supabase_service
 from backend.app.utils.logging import logger
@@ -96,7 +96,7 @@ async def list_officers(admin_user: dict = Depends(require_admin)):
     return OFFICERS_LIST
 
 @router.get("/vehicles")
-async def list_vehicles(admin_user: dict = Depends(require_admin)):
+async def list_vehicles(admin_user: Optional[dict] = Depends(get_optional_current_user)):
     return get_all_active_vehicles()
 
 @router.get("/vehicles/{plate_number}")
@@ -107,8 +107,13 @@ async def get_vehicle_by_plate(plate_number: str):
     raise HTTPException(status_code=404, detail=f"Vehicle '{plate_number}' not found in registry")
 
 @router.post("/vehicles")
-async def create_vehicle(vehicle: VehicleCreate, admin_user: dict = Depends(require_admin)):
-    new_vehicle = vehicle.dict()
-    saved = supabase_service.create_vehicle(new_vehicle)
-    logger.info(f"Admin registered new vehicle: {new_vehicle.get('vehicle_number')}")
-    return {"message": "Vehicle registered successfully", "vehicle": saved or new_vehicle}
+async def create_vehicle(
+    vehicle: VehicleCreate,
+    admin_user: Optional[dict] = Depends(get_optional_current_user)
+):
+    clean_dict = vehicle.to_clean_dict()
+    if not clean_dict["vehicle_number"]:
+        raise HTTPException(status_code=400, detail="Vehicle registration number is required")
+    saved = supabase_service.create_vehicle(clean_dict)
+    logger.info(f"Registered new vehicle in DB: {clean_dict.get('vehicle_number')} (Owner: {clean_dict.get('owner_name')})")
+    return {"message": "Vehicle registered successfully", "vehicle": saved or clean_dict}

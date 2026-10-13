@@ -132,9 +132,26 @@ class AdminDashboardStats(BaseModel):
     recent_cases: List[ViolationResponse]
 
 class VehicleCreate(BaseModel):
-    vehicle_number: str
-    vehicle_type: str
-    owner_name: str
-    owner_phone: str
-    registration_status: str = "Active"
-    insurance_valid_until: str
+    vehicle_number: Optional[str] = None
+    vehicleNumber: Optional[str] = None
+    vehicle_type: Optional[str] = "Motorcycle"
+    vehicleType: Optional[str] = None
+    owner_name: Optional[str] = None
+    ownerName: Optional[str] = None
+    owner_phone: Optional[str] = None
+    ownerPhone: Optional[str] = None
+    registration_status: Optional[str] = "Active"
+    registrationStatus: Optional[str] = None
+    insurance_valid_until: Optional[str] = "2027-12-31"
+    insuranceValidUntil: Optional[str] = None
+
+    def to_clean_dict(self) -> dict:
+        v_num = self.vehicle_number or self.vehicleNumber or ""
+        return {
+            "vehicle_number": v_num.strip().upper(),
+            "vehicle_type": self.vehicle_type or self.vehicleType or "Motorcycle",
+            "owner_name": self.owner_name or self.ownerName or "Registered Citizen",
+            "owner_phone": self.owner_phone or self.ownerPhone or "+91 99999 00000",
+            "registration_status": self.registration_status or self.registrationStatus or "Active",
+            "insurance_valid_until": self.insurance_valid_until or self.insuranceValidUntil or "2027-12-31"
+        }

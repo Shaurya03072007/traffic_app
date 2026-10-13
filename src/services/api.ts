@@ -518,3 +518,71 @@ export async function submitViolationBackend(data: any, token?: string): Promise
   return null;
 }
 
+export async function fetchLiveVehicles(token?: string): Promise<RegisteredVehicle[] | null> {
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = ['/api/admin/vehicles', 'http://127.0.0.1:8000/api/admin/vehicles', 'http://localhost:8000/api/admin/vehicles'];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data.map((v: any) => ({
+            vehicleNumber: v.vehicle_number || v.vehicleNumber,
+            vehicleType: v.vehicle_type || v.vehicleType || 'Motorcycle',
+            ownerName: v.owner_name || v.ownerName || 'Registered Citizen',
+            ownerPhone: v.owner_phone || v.ownerPhone || '+91 99999 00000',
+            registrationStatus: v.registration_status || v.registrationStatus || 'Active',
+            insuranceValidUntil: v.insurance_valid_until || v.insuranceValidUntil || '2027-12-31'
+          }));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+export async function registerVehicleBackend(vehicle: any, token?: string): Promise<RegisteredVehicle | null> {
+  const payload = {
+    vehicle_number: (vehicle.vehicleNumber || vehicle.vehicle_number || '').trim().toUpperCase(),
+    vehicle_type: vehicle.vehicleType || vehicle.vehicle_type || 'Motorcycle',
+    owner_name: vehicle.ownerName || vehicle.owner_name || 'Registered Citizen',
+    owner_phone: vehicle.ownerPhone || vehicle.owner_phone || '+91 99999 00000',
+    registration_status: vehicle.registrationStatus || vehicle.registration_status || 'Active',
+    insurance_valid_until: vehicle.insuranceValidUntil || vehicle.insurance_valid_until || '2027-12-31'
+  };
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const endpoints = ['/api/admin/vehicles', 'http://127.0.0.1:8000/api/admin/vehicles', 'http://localhost:8000/api/admin/vehicles'];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const saved = json.vehicle || json;
+        return {
+          vehicleNumber: saved.vehicle_number || payload.vehicle_number,
+          vehicleType: saved.vehicle_type || payload.vehicle_type,
+          ownerName: saved.owner_name || payload.owner_name,
+          ownerPhone: saved.owner_phone || payload.owner_phone,
+          registrationStatus: saved.registration_status || payload.registration_status,
+          insuranceValidUntil: saved.insurance_valid_until || payload.insurance_valid_until
+        };
+      }
+    } catch (e) {
+      console.warn(`Failed to register vehicle on ${url}:`, e);
+    }
+  }
+  return null;
+}
+

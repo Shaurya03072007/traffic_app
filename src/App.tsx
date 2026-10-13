@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { UserProfile, ViolationRecord } from './types';
-import { INITIAL_VIOLATIONS, REGISTERED_VEHICLES, POLICE_OFFICERS, fetchLiveViolations, updateViolationStatusBackend } from './services/api';
+import { UserProfile, ViolationRecord, RegisteredVehicle } from './types';
+import { INITIAL_VIOLATIONS, REGISTERED_VEHICLES, POLICE_OFFICERS, fetchLiveViolations, updateViolationStatusBackend, fetchLiveVehicles, registerVehicleBackend } from './services/api';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -51,12 +51,37 @@ export default function App() {
     }
   }, [currentUser?.token, currentUser?.role, currentUser?.vehicleNumber]);
 
+  // Sync registered vehicles from backend database
+  const refreshVehicles = useCallback(async () => {
+    try {
+      const liveVehicles = await fetchLiveVehicles(currentUser?.token);
+      if (liveVehicles && liveVehicles.length > 0) {
+        setVehicles(prev => {
+          const map = new Map<string, RegisteredVehicle>();
+          // 1. Initial demo vehicles
+          REGISTERED_VEHICLES.forEach(v => map.set(v.vehicleNumber.replace(/[\s-]/g, '').toUpperCase(), v));
+          // 2. Previously cached vehicles
+          prev.forEach(v => map.set(v.vehicleNumber.replace(/[\s-]/g, '').toUpperCase(), v));
+          // 3. Live database vehicles (take precedence)
+          liveVehicles.forEach(v => map.set(v.vehicleNumber.replace(/[\s-]/g, '').toUpperCase(), v));
+          return Array.from(map.values());
+        });
+      }
+    } catch (e) {
+      console.warn("Could not sync live vehicles from backend:", e);
+    }
+  }, [currentUser?.token]);
+
   // Fetch immediately on mount and periodically every 4 seconds
   useEffect(() => {
     refreshViolations();
-    const interval = setInterval(refreshViolations, 4000);
+    refreshVehicles();
+    const interval = setInterval(() => {
+      refreshViolations();
+      refreshVehicles();
+    }, 4000);
     return () => clearInterval(interval);
-  }, [refreshViolations]);
+  }, [refreshViolations, refreshVehicles]);
 
   // AUTOMATIC ROLE ROUTING:
   // IF role == 'admin': automatically redirect to /admin/dashboard
@@ -84,23 +109,19 @@ export default function App() {
   };
 
   const handleAddVehicle = async (newVehicle: any) => {
-    // Optional: Call the backend API we created earlier
     try {
-      const res = await fetch('/api/admin/vehicles', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentUser?.token || currentUser?.id}`
-        },
-        body: JSON.stringify(newVehicle)
-      });
-      if (res.ok) {
-        setVehicles(prev => [...prev, newVehicle]);
+      const saved = await registerVehicleBackend(newVehicle, currentUser?.token);
+      if (saved) {
+        setVehicles(prev => {
+          const cleanKey = saved.vehicleNumber.replace(/[\s-]/g, '').toUpperCase();
+          const filtered = prev.filter(v => v.vehicleNumber.replace(/[\s-]/g, '').toUpperCase() !== cleanKey);
+          return [saved, ...filtered];
+        });
       } else {
-        setVehicles(prev => [...prev, newVehicle]); // Fallback for demo
+        setVehicles(prev => [newVehicle, ...prev]);
       }
     } catch (e) {
-       setVehicles(prev => [...prev, newVehicle]); // Fallback for demo
+      setVehicles(prev => [newVehicle, ...prev]);
     }
   };
 
