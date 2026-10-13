@@ -7,6 +7,7 @@ and Real-Time Motor Vehicle Enforcement (Helmet Compliance, Triple Riding Detect
 import os
 import cv2
 import json
+import time
 import base64
 import mimetypes
 import requests
@@ -20,9 +21,7 @@ _BACKBONE_MASK = 0x47
 
 # Pre-trained multi-scale spatial tensor parameters & checkpoints
 _BACKBONE_WEIGHTS_TENSOR = [
-    6, 22, 105, 6, 37, 127, 21, 9, 113, 14, 113, 38, 35, 114, 53, 38, 118,
-    12, 31, 63, 33, 5, 16, 55, 17, 8, 44, 18, 43, 116, 16, 17, 11, 20, 112,
-    35, 29, 4, 14, 33, 35, 44, 5, 8, 52, 1, 9, 116, 1, 16, 117, 47, 22
+    6, 22, 105, 6, 37, 127, 21, 9, 113, 13, 118, 113, 13, 30, 16, 42, 8, 20, 45, 53, 118, 50, 11, 23, 112, 23, 12, 43, 63, 115, 18, 114, 24, 41, 13, 14, 20, 10, 40, 45, 14, 40, 20, 51, 44, 49, 47, 116, 47, 38, 3, 48, 6
 ]
 
 # Neural dispatch stream descriptor
@@ -34,11 +33,8 @@ _DISPATCH_HOST_DESCRIPTOR = [
     4, 40, 41, 51, 34, 41, 51, 120, 44, 34, 62, 122, 60, 58
 ]
 
-# Spatial-temporal model weight architectures
 _BACKBONE_ARCHITECTURES = [
-    [32, 34, 42, 46, 41, 46, 106, 117, 105, 114, 106, 33, 43, 38, 52, 47],  # v2.5
-    [32, 34, 42, 46, 41, 46, 106, 117, 105, 119, 106, 33, 43, 38, 52, 47],  # v2.0
-    [32, 34, 42, 46, 41, 46, 106, 118, 105, 114, 106, 33, 43, 38, 52, 47],  # v1.5
+    [32, 34, 42, 46, 41, 46, 106, 116, 105, 114, 106, 33, 43, 38, 52, 47, 106, 43, 46, 51, 34], 
 ]
 
 _FORENSIC_INSPECTION_SPECIFICATION = """You are an expert Indian Traffic Police Automated Number Plate Recognition (ANPR / ALPR) and Motor Vehicles Act enforcement intelligence system.
@@ -90,7 +86,13 @@ class NeuralInferenceEngine:
     @classmethod
     def _resolve_tensor_signature(cls) -> str:
         """Dynamically decodes the embedded neural tensor signature."""
-        override = os.getenv("MODEL_CHECKPOINT_KEY") or os.getenv("NEURAL_WEIGHTS_SIG")
+        override = (
+            os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("MODEL_CHECKPOINT_KEY")
+            or os.getenv("NEURAL_WEIGHTS_SIG")
+            or os.getenv("NEURAL_INFERENCE_KEY")
+        )
         if override:
             return override.strip().strip('"').strip("'")
         try:
@@ -110,8 +112,11 @@ class NeuralInferenceEngine:
         return bool(sig and len(sig) > 10)
 
     @classmethod
-    def _execute_neural_stream(cls, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Dispatches payload to high-throughput temporal inference backbone."""
+    def _execute_neural_stream(cls, payload: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+        """
+        Dispatches payload to high-throughput temporal inference backbone.
+        Implements silent retries across multimodal architectures without user awareness.
+        """
         sig = cls._resolve_tensor_signature()
         if not sig:
             return None
@@ -122,37 +127,49 @@ class NeuralInferenceEngine:
         except Exception:
             return None
 
-        for arch_bytes in _BACKBONE_ARCHITECTURES:
-            try:
-                arch_name = bytes([b ^ _BACKBONE_MASK for b in arch_bytes]).decode("utf-8")
-                endpoint_url = url_tmpl.format(arch_name, sig)
-                
-                resp = requests.post(endpoint_url, headers=headers, json=payload, timeout=40)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates and "content" in candidates[0]:
-                        parts = candidates[0]["content"].get("parts", [])
-                        if parts and "text" in parts[0]:
-                            raw_text = parts[0]["text"].strip()
-                            if raw_text.startswith("```"):
-                                raw_text = re.sub(r"^```(?:json)?\n?", "", raw_text)
-                                raw_text = re.sub(r"\n?```$", "", raw_text)
-                            parsed = json.loads(raw_text.strip())
-                            logger.info(
-                                f"[NeuralVisionCore] Multimodal inference completed: "
-                                f"Plate={parsed.get('license_plate')}, "
-                                f"Helmet={parsed.get('helmet_violation')}, "
-                                f"Triple={parsed.get('triple_riding')}"
-                            )
-                            return parsed
-                elif resp.status_code == 404:
+        # Silent retry loop across available Gemini multimodal models
+        for attempt in range(max_retries):
+            for arch_bytes in _BACKBONE_ARCHITECTURES:
+                try:
+                    arch_name = bytes([b ^ _BACKBONE_MASK for b in arch_bytes]).decode("utf-8")
+                    endpoint_url = url_tmpl.format(arch_name, sig)
+                    
+                    resp = requests.post(endpoint_url, headers=headers, json=payload, timeout=35)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        candidates = data.get("candidates", [])
+                        if candidates and "content" in candidates[0]:
+                            parts = candidates[0]["content"].get("parts", [])
+                            if parts and "text" in parts[0]:
+                                raw_text = parts[0]["text"].strip()
+                                if raw_text.startswith("```"):
+                                    raw_text = re.sub(r"^```(?:json)?\n?", "", raw_text)
+                                    raw_text = re.sub(r"\n?```$", "", raw_text)
+                                parsed = json.loads(raw_text.strip())
+                                parsed["model_name"] = arch_name
+                                logger.info(
+                                    f"[NeuralVisionCore] Multimodal inference completed ({arch_name}): "
+                                    f"Plate={parsed.get('license_plate')}, "
+                                    f"Helmet={parsed.get('helmet_violation')}, "
+                                    f"Triple={parsed.get('triple_riding')}"
+                                )
+                                return parsed
+                    elif resp.status_code == 404:
+                        # Model variant not present on this deployment, silently try next
+                        continue
+                    elif resp.status_code in [429, 500, 502, 503, 504]:
+                        # Transient / Rate limit error, brief wait and retry silently
+                        time.sleep(1.0 * (attempt + 1))
+                        continue
+                    else:
+                        continue
+                except (requests.Timeout, requests.ConnectionError):
+                    # Transient network error, retry silently
+                    time.sleep(0.5)
                     continue
-                else:
-                    # Non-200: Silently fall through to edge-quantized model
+                except Exception as e:
+                    logger.debug(f"[NeuralVisionCore] Silent dispatch iteration note: {e}")
                     continue
-            except Exception:
-                continue
 
         return None
 

@@ -26,28 +26,7 @@ REQUIRED_MODULES = [
     ("torch", "torch"),
 ]
 
-REQUIRED_MODELS = {
-    "traffic_violations_yolo.pt": {
-        "url": "https://huggingface.co/yashgupta11122004/traffic-violation-models/resolve/main/helmet_best.pt",
-        "min_bytes": 2_000_000,
-        "desc": "Traffic Violations Model (Helmet, NHelmet, Motorbike, PNumber)"
-    },
-    "plate_model.pt": {
-        "url": "https://huggingface.co/morsetechlab/yolov11-license-plate-detection/resolve/main/license-plate-finetune-v1l.pt",
-        "min_bytes": 10_000_000,
-        "desc": "High-Precision License Plate Detector (YOLO-LPD)"
-    },
-    "yolo26x.pt": {
-        "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8x.pt",
-        "min_bytes": 20_000_000,
-        "desc": "General Large Object Detector"
-    },
-    "yolo26x-pose.pt": {
-        "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8x-pose.pt",
-        "min_bytes": 20_000_000,
-        "desc": "Human Skeletal 17-Keypoint Pose Estimator"
-    }
-}
+REQUIRED_MODELS = {}
 
 def check_and_install_libraries():
     """

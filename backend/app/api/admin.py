@@ -27,22 +27,8 @@ OFFICERS_LIST = [
 ]
 
 def get_all_active_vehicles() -> List[dict]:
-    """Retrieves vehicles from Supabase DB, falling back to local list."""
-    if supabase_service.is_connected():
-        db_v = supabase_service.get_vehicles()
-        if db_v and len(db_v) > 0:
-            seen = set()
-            merged = []
-            for v in db_v:
-                clean = re.sub(r'[^A-Z0-9]', '', v.get("vehicle_number", "").upper())
-                seen.add(clean)
-                merged.append(v)
-            for v in REGISTERED_VEHICLES:
-                clean = re.sub(r'[^A-Z0-9]', '', v.get("vehicle_number", "").upper())
-                if clean not in seen:
-                    merged.append(v)
-            return merged
-    return REGISTERED_VEHICLES
+    """Retrieves vehicles from Supabase DB, falling back to local cache."""
+    return supabase_service.get_vehicles()
 
 @router.get("/dashboard", response_model=AdminDashboardStats)
 async def get_dashboard(admin_user: dict = Depends(require_admin)):
@@ -115,25 +101,14 @@ async def list_vehicles(admin_user: dict = Depends(require_admin)):
 
 @router.get("/vehicles/{plate_number}")
 async def get_vehicle_by_plate(plate_number: str):
-    # Check Supabase
-    if supabase_service.is_connected():
-        v = supabase_service.get_vehicle_by_plate(plate_number)
-        if v:
-            return v
-
-    norm = re.sub(r'[\s\-]', '', plate_number).upper()
-    for v in REGISTERED_VEHICLES:
-        if re.sub(r'[\s\-]', '', v.get("vehicle_number", "")).upper() == norm:
-            return v
-    raise HTTPException(status_code=404, detail=f"Vehicle '{plate_number}' not found")
+    v = supabase_service.get_vehicle_by_plate(plate_number)
+    if v:
+        return v
+    raise HTTPException(status_code=404, detail=f"Vehicle '{plate_number}' not found in registry")
 
 @router.post("/vehicles")
 async def create_vehicle(vehicle: VehicleCreate, admin_user: dict = Depends(require_admin)):
     new_vehicle = vehicle.dict()
-    # Save to Supabase
-    if supabase_service.is_connected():
-        supabase_service.create_vehicle(new_vehicle)
-    # Also update local list
-    REGISTERED_VEHICLES.append(new_vehicle)
+    saved = supabase_service.create_vehicle(new_vehicle)
     logger.info(f"Admin registered new vehicle: {new_vehicle.get('vehicle_number')}")
-    return {"message": "Vehicle registered successfully", "vehicle": new_vehicle}
+    return {"message": "Vehicle registered successfully", "vehicle": saved or new_vehicle}

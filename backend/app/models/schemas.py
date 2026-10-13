@@ -77,6 +77,11 @@ class ViolationCreate(BaseModel):
     evidence_video_url: Optional[str] = None
     evidence_image_url: Optional[str] = None
     officer_remarks: Optional[str] = None
+    
+    # Optional fine override and vehicle owner details
+    fine_amount: Optional[int] = None
+    owner_phone: Optional[str] = None
+    owner_name: Optional[str] = None
 
 class ViolationResponse(BaseModel):
     id: str
@@ -107,6 +112,7 @@ class ViolationResponse(BaseModel):
     officer_remarks: Optional[str] = None
     created_at: datetime
     owner_phone: Optional[str] = None
+    owner_name: Optional[str] = None
 
 class ViolationStatusUpdate(BaseModel):
     status: str

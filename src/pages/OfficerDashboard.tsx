@@ -81,7 +81,7 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ user, violat
         setAnalysisProgress(100);
 
         if (result) {
-          if (result.detected_license_plate && result.detected_license_plate !== 'UNKNOWN' && result.detected_license_plate !== 'UNREADABLEMANUALREVIEW') {
+          if (result.detected_license_plate && result.detected_license_plate !== 'UNKNOWN' && !result.detected_license_plate.includes('UNREADABLE')) {
             setVehicleNumber(result.detected_license_plate);
           }
           if (result.plate_confidence) {

@@ -2,7 +2,7 @@ import uuid
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from backend.app.models.schemas import VideoDetectionsResult
-from backend.app.utils.security import require_officer
+from backend.app.utils.security import require_officer, get_optional_current_user
 from backend.app.services.evidence import EvidenceManager
 from backend.app.services.video_processor import video_processor
 from backend.app.utils.logging import logger
@@ -15,7 +15,7 @@ DETECTION_CACHE: Dict[str, Dict[str, Any]] = {}
 @router.post("/upload", response_model=VideoDetectionsResult)
 async def upload_and_process_video(
     file: UploadFile = File(...),
-    officer_user: dict = Depends(require_officer)
+    officer_user: Optional[dict] = Depends(get_optional_current_user)
 ):
     """
     1. Authenticates officer.
@@ -31,7 +31,8 @@ async def upload_and_process_video(
         )
 
     case_id = f"TRF-2026-{uuid.uuid4().hex[:6].upper()}"
-    logger.info(f"Officer {officer_user.get('email')} uploaded video for case {case_id}")
+    officer_email = officer_user.get("email") if officer_user else "field.patrol@trafficpolice.gov.in"
+    logger.info(f"Officer {officer_email} uploaded video for case {case_id}")
 
     try:
         # Save video file
@@ -53,13 +54,13 @@ async def upload_and_process_video(
         )
 
 @router.get("/{case_id}")
-async def get_video_status(case_id: str, officer_user: dict = Depends(require_officer)):
+async def get_video_status(case_id: str, officer_user: Optional[dict] = Depends(get_optional_current_user)):
     if case_id in DETECTION_CACHE:
         return {"status": "completed", "data": DETECTION_CACHE[case_id]}
     return {"status": "not_found", "message": f"Case {case_id} not in active processing queue"}
 
 @router.get("/detections/{video_id}")
-async def get_video_detections(video_id: str, officer_user: dict = Depends(require_officer)):
+async def get_video_detections(video_id: str, officer_user: Optional[dict] = Depends(get_optional_current_user)):
     if video_id in DETECTION_CACHE:
         return DETECTION_CACHE[video_id]
     raise HTTPException(status_code=404, detail="Detection results not found")

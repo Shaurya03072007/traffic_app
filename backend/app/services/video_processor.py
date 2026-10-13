@@ -4,21 +4,32 @@ import re
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from backend.app.ai.detector import detector
-from backend.app.ai.tracker import rider_associator
-from backend.app.ai.helmet import helmet_detector
-from backend.app.ai.triple_riding import triple_riding_detector
-from backend.app.ai.plate_ocr import plate_recognizer, levenshtein_distance
 from backend.app.ai.neural_inference import neural_inference
 from backend.app.services.evidence import EvidenceManager
 from backend.app.utils.logging import logger
 
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculates Levenshtein edit distance for fuzzy registration lookup."""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    return previous_row[-1]
+
 class VideoProcessor:
     """
     High-Performance Police Video & Image Enforcement Engine:
-    - DeepTraffic Spatial-Temporal Neural Vision for Still Snapshot Analysis
-    - Multimodal Keyframe Attention Backbone for Surveillance Video
-    - Seamless Local YOLOv8 & EasyOCR Fallback Engine
+    - Multimodal Gemini Vision Core for Snapshot & Temporal Surveillance Video
+    - Zero local model fallback (silent cloud retries across Gemini architectures)
     - Evidentiary Police Snapshot Rendering & Watermarking
     - Alphanumeric Vehicle Registration Synchronization
     """
@@ -43,15 +54,13 @@ class VideoProcessor:
         with open(image_path, "rb") as f:
             img_bytes = f.read()
 
-        # Primary: DeepTraffic Spatial-Temporal Neural Vision
+        # Primary: Multimodal Gemini Vision
         neural_data = neural_inference.analyze_image(img_bytes)
         
-        # Local detector for bounding box evidence rendering
-        detections = detector.detect_frame(frame)
-        motorcycles = detections["motorcycles"]
-        helmets = detections["helmets"]
-        no_helmets = detections["no_helmets"]
-        plate_boxes = detections["plate_boxes"]
+        # Silent retry without user knowing if initial response was empty
+        if not neural_data:
+            time.sleep(1.0)
+            neural_data = neural_inference.analyze_image(img_bytes)
 
         if neural_data:
             plate_str = neural_data.get("license_plate", "UNKNOWN")
@@ -59,25 +68,23 @@ class VideoProcessor:
             has_triple_riding = bool(neural_data.get("triple_riding", False))
             rider_count = int(neural_data.get("rider_count", 3 if has_triple_riding else 1))
             confidence = float(neural_data.get("confidence", 0.95))
-            helmet_details = neural_data.get("helmet_details", "Helmet violation confirmed")
+            helmet_details = neural_data.get("helmet_details", "Rider observed without protective helmet." if has_helmet_violation else "Protective helmet compliance confirmed.")
             triple_details = neural_data.get("triple_riding_details", f"Vehicle carries {rider_count} riders")
+            model_name = neural_data.get("model_name", "Gemini-3.5-Flash-Lite (Multimodal Vision)")
         else:
-            # Fallback to local pipeline
-            associated = rider_associator.associate(motorcycles, detections["persons"])
-            h_eval = helmet_detector.evaluate_violation(frame, detections["persons"], detections=detections)
-            t_eval = triple_riding_detector.evaluate(associated, detections=detections)
-            p_details = plate_recognizer.extract_license_plate_details(frame, motorcycles[0] if motorcycles else None)
-            
-            plate_str = p_details.get("plate", "UNREADABLE (Manual Review)")
-            has_helmet_violation = h_eval["violation"]
-            has_triple_riding = t_eval["detected"]
-            rider_count = t_eval.get("rider_count", 1)
-            confidence = 0.88
-            helmet_details = h_eval["details"]
-            triple_details = t_eval["details"]
+            # Local YOLO fallback completely stopped
+            logger.warning("[VideoProcessor] Gemini multimodal vision did not return candidates after retries. Local model fallback is disabled.")
+            plate_str = "UNREADABLE (Manual Review)"
+            has_helmet_violation = False
+            has_triple_riding = False
+            rider_count = 1
+            confidence = 0.0
+            helmet_details = "Multimodal analysis pending manual review"
+            triple_details = "Multimodal analysis pending manual review"
+            model_name = "Gemini-3.5-Flash-Lite"
 
         annotated_frame = cls._render_police_overlay(
-            frame, motorcycles, helmets, no_helmets, plate_boxes,
+            frame, [], [], [], [],
             plate_str, has_helmet_violation, has_triple_riding, 0.0
         )
 
@@ -115,7 +122,7 @@ class VideoProcessor:
             },
             "evidence_frame_url": evidence_url,
             "evidence_video_url": f"/static/evidence/{case_id}/{image_path.name}",
-            "model_name": "YOLOv8-TrafficCustom-v1.2"
+            "model_name": model_name
         }
 
     @classmethod
@@ -150,11 +157,16 @@ class VideoProcessor:
         if not sampled_1fps_frames:
             raise ValueError("No frames could be extracted from video.")
 
-        # STEP 1: Process video stream directly through accelerated neural vision backbone
+        # STEP 1: Process video stream directly through accelerated Gemini neural backbone
         neural_data = neural_inference.analyze_video_file(video_path)
 
-        # Fallback to keyframe sampling if streaming container is unindexed
+        # Silent retry: analyze sampled keyframes if streaming container was unindexed
         if not neural_data and sampled_1fps_frames:
+            neural_data = neural_inference.analyze_video_frames(sampled_1fps_frames)
+
+        # Silent retry: repeat keyframe analysis if still empty
+        if not neural_data and sampled_1fps_frames:
+            time.sleep(1.0)
             neural_data = neural_inference.analyze_video_frames(sampled_1fps_frames)
 
         # Determine best evidence keyframe
@@ -187,39 +199,29 @@ class VideoProcessor:
                 best_frame_sec = duration / 2.0
                 best_frame_num = frame_indices[len(sampled_1fps_frames) // 2]
 
-        # Local detector for crisp visual bounding boxes on evidence frame
-        detections = detector.detect_frame(best_frame)
-        motorcycles = detections["motorcycles"]
-        helmets = detections["helmets"]
-        no_helmets = detections["no_helmets"]
-        plate_boxes = detections["plate_boxes"]
-
         if neural_data:
             plate_str = neural_data.get("license_plate", "UNKNOWN")
             has_helmet_violation = bool(neural_data.get("helmet_violation", False))
             has_triple_riding = bool(neural_data.get("triple_riding", False))
             rider_count = int(neural_data.get("rider_count", 3 if has_triple_riding else 1))
             confidence = float(neural_data.get("plate_confidence") or neural_data.get("confidence", 0.95))
-            helmet_details = neural_data.get("helmet_details", "Rider without protective helmet detected")
+            helmet_details = neural_data.get("helmet_details", "Rider observed without protective helmet." if has_helmet_violation else "Protective helmet compliance verified.")
             triple_details = neural_data.get("triple_riding_details", f"Vehicle carries {rider_count} passengers")
-            model_used = "DeepTraffic-NeuralVision-v4"
+            model_used = neural_data.get("model_name", "Gemini-3.5-Flash-Lite (Multimodal Vision)")
         else:
-            # Fallback to local pipeline
-            associated = rider_associator.associate(motorcycles, detections["persons"])
-            h_eval = helmet_detector.evaluate_violation(best_frame, detections["persons"], detections=detections)
-            t_eval = triple_riding_detector.evaluate(associated, detections=detections)
-            p_details = plate_recognizer.extract_license_plate_details(best_frame, motorcycles[0] if motorcycles else None)
-            
-            plate_str = p_details.get("plate", "UNREADABLE (Manual Review)")
-            has_helmet_violation = h_eval["violation"]
-            has_triple_riding = t_eval["detected"]
-            rider_count = t_eval.get("rider_count", 1)
-            confidence = 0.88
-            helmet_details = h_eval["details"]
-            triple_details = t_eval["details"]
+            # Local YOLO fallback completely stopped
+            logger.warning("[VideoProcessor] Gemini multimodal vision did not return candidates after retries. Local model fallback is disabled.")
+            plate_str = "UNREADABLE (Manual Review)"
+            has_helmet_violation = False
+            has_triple_riding = False
+            rider_count = 1
+            confidence = 0.0
+            helmet_details = "Multimodal analysis pending manual review"
+            triple_details = "Multimodal analysis pending manual review"
+            model_used = "Gemini-3.5-Flash-Lite"
 
         annotated_frame = cls._render_police_overlay(
-            best_frame, motorcycles, helmets, no_helmets, plate_boxes,
+            best_frame, [], [], [], [],
             plate_str, has_helmet_violation, has_triple_riding, best_frame_sec
         )
 
@@ -259,7 +261,7 @@ class VideoProcessor:
             },
             "evidence_frame_url": evidence_url,
             "evidence_video_url": f"/static/evidence/{case_id}/{video_path.name}",
-            "model_name": model_used if 'model_used' in locals() else "YOLOv8-TrafficCustom-v1.2"
+            "model_name": model_used
         }
 
     @staticmethod

@@ -83,12 +83,26 @@ fun VideoCaptureScreen(
 
     val uploadVideoFile = { file: File ->
         isUploading = true
-        uploadStatusText = "Uploading video to FastAPI computer vision backend..."
+        uploadStatusText = "Uploading patrol media to FastAPI backend..."
         scope.launch {
             try {
-                val reqBody = file.asRequestBody("video/mp4".toMediaTypeOrNull())
+                val ext = file.extension.lowercase()
+                val mediaTypeStr = when (ext) {
+                    "jpg", "jpeg" -> "image/jpeg"
+                    "png" -> "image/png"
+                    "webp" -> "image/webp"
+                    "gif" -> "image/gif"
+                    "bmp" -> "image/bmp"
+                    "mp4" -> "video/mp4"
+                    "avi" -> "video/x-msvideo"
+                    "mov" -> "video/quicktime"
+                    "webm" -> "video/webm"
+                    "mkv" -> "video/x-matroska"
+                    else -> "application/octet-stream"
+                }
+                val reqBody = file.asRequestBody(mediaTypeStr.toMediaTypeOrNull())
                 val part = MultipartBody.Part.createFormData("file", file.name, reqBody)
-                uploadStatusText = "Executing AI Pipeline: YOLO, Rider Tracker, Helmet & Capacity Analyzers..."
+                uploadStatusText = "Executing Gemini AI Vision Multimodal Pipeline..."
                 
                 val response = ApiClient.getService().uploadVideo(part)
                 if (response.isSuccessful && response.body() != null) {
@@ -109,11 +123,28 @@ fun VideoCaptureScreen(
     ) { uri: Uri? ->
         uri?.let {
             isUploading = true
-            uploadStatusText = "Processing selected video..."
+            uploadStatusText = "Processing selected media..."
             scope.launch {
                 try {
+                    val mimeType = context.contentResolver.getType(it) ?: ""
+                    val extension = when {
+                        mimeType.contains("jpeg") || mimeType.contains("jpg") -> "jpg"
+                        mimeType.contains("png") -> "png"
+                        mimeType.contains("webp") -> "webp"
+                        mimeType.contains("gif") -> "gif"
+                        mimeType.contains("bmp") -> "bmp"
+                        mimeType.contains("mp4") -> "mp4"
+                        mimeType.contains("avi") -> "avi"
+                        mimeType.contains("mov") || mimeType.contains("quicktime") -> "mov"
+                        mimeType.contains("webm") -> "webm"
+                        mimeType.contains("mkv") -> "mkv"
+                        else -> {
+                            val mapExt = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                            if (!mapExt.isNullOrEmpty()) mapExt else "jpg"
+                        }
+                    }
                     val inputStream = context.contentResolver.openInputStream(it)
-                    val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}.mp4")
+                    val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}.$extension")
                     val outputStream = FileOutputStream(tempFile)
                     inputStream?.copyTo(outputStream)
                     inputStream?.close()

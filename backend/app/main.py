@@ -25,7 +25,8 @@ from backend.app.services.supabase_service import supabase_service
 from backend.app.utils.logging import logger
 
 # Ensure evidence storage exists
-STORAGE_DIR = Path("storage/evidence")
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+STORAGE_DIR = ROOT_DIR / "storage" / "evidence"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 @asynccontextmanager
@@ -81,11 +82,11 @@ async def health_check():
         "anpr_engine": "Custom DeepTraffic Spatial-Temporal ANPR Engine",
         "mode": "LAN / Local Development",
         "ai_models": [
-            "DeepTraffic Spatial-Temporal Multimodal Backbone v4.2",
-            "YOLOv8x-CustomTraffic-Detector",
+            "Gemini 3.5 Flash Lite Multimodal Neural Backbone",
+            "DeepTraffic Spatial-Temporal Multimodal Core",
             "Forensic Alphanumeric Plate Extractor",
-            "Head-Crop Biometric Helmet Classifier",
-            "Multi-Rider Spatial Associator"
+            "Multimodal Protective Helmet Compliance Classifier",
+            "Multimodal Passenger Capacity Evaluator"
         ]
     }
 

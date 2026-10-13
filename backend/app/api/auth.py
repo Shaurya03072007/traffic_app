@@ -53,20 +53,15 @@ async def login(credentials: LoginRequest):
     # 1. Try Supabase Auth if connected
     if supabase_service.is_connected():
         try:
-            client = supabase_service.get_client()
-            res = client.auth.sign_in_with_password({
-                "email": email_clean,
-                "password": credentials.password
-            })
-            if res.user:
-                profile_res = client.table("profiles").select("*").eq("id", res.user.id).single().execute()
-                profile_data = profile_res.data or {}
-                
+            auth_res = supabase_service.sign_in_user(email_clean, credentials.password)
+            if auth_res:
+                user_obj = auth_res.get("user", {})
+                profile_data = auth_res.get("profile", {})
                 role = profile_data.get("role", "officer")
                 user_profile = UserProfile(
-                    id=res.user.id,
+                    id=user_obj.get("id", str(uuid.uuid4())),
                     email=email_clean,
-                    full_name=profile_data.get("full_name", res.user.email),
+                    full_name=profile_data.get("full_name", email_clean),
                     role=role,
                     badge_number=profile_data.get("badge_number"),
                     department=profile_data.get("department"),
@@ -74,14 +69,14 @@ async def login(credentials: LoginRequest):
                 )
                 
                 token = create_access_token({
-                    "sub": res.user.id,
+                    "sub": user_profile.id,
                     "email": email_clean,
                     "role": role,
                     "badge_number": user_profile.badge_number,
                     "name": user_profile.full_name
                 })
                 
-                logger.info(f"User {email_clean} logged in via Supabase. Assigned role: {role}")
+                logger.info(f"User {email_clean} logged in via Supabase PostgreSQL Cloud. Assigned role: {role}")
                 return AuthResponse(access_token=token, user=user_profile)
         except Exception as e:
             logger.warning(f"Supabase login attempt error: {e}. Checking local demo users.")
